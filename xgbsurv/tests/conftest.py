@@ -105,8 +105,9 @@ def deephit_data(phi=phi):
     target = target[:nrows]
     time, event = transform_back(target)
     ncols = len(np.unique(np.abs(target)))
-    print(ncols)
+    target = np.tile(target, (ncols,1)).T
+    #print(ncols)
     #phi = np.random.rand(20, ncols)
     return time, event, target, phi
 
-time, event, target, phi = deephit_data()
+#time, event, target, phi = deephit_data()
