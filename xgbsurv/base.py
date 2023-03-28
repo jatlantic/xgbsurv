@@ -65,8 +65,9 @@ class XGBSurv(XGBRegressor):
             
             #TODO: Potentially swap for k-fold to have better event distribution
             #TODO: verify for deephit split
+            #target_sign = np.sign(y) beware of deephit dims
             X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=eval_test_size, random_state=params['random_state'])
+                X, y, test_size=eval_test_size, random_state=params['random_state']) #, stratify=target_sign
             
             #eval_set = [(X_test, y_test)]
             
