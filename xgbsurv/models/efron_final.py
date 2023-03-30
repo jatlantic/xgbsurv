@@ -240,11 +240,15 @@ def efron_objective(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[float
         )
     return grad, hess
 
-@jit(nopython=True)
+#@jit(nopython=True) np.insert and numba not working
 def efron_baseline_estimator(log_partial_hazard, time, event):
 
+    # currently censoreed events disappear from the estimate
+    # need to deal with that!!!
+
+
     # Assumes times have been sorted beforehand.
-    n_unique_times = len(np.unique(time)) # check this part
+    n_unique_times = len(np.unique(time[event==1])) # check this part
     uniq_times = np.unique(time)
     partial_hazard = np.exp(log_partial_hazard)
     samples = time.shape[0]
@@ -255,12 +259,13 @@ def efron_baseline_estimator(log_partial_hazard, time, event):
     death_set_risk = 0
     denominator = 0
     estimator = 0
-    efron_estimator = np.zeros(n_unique_times)
-    unique_event_times = np.zeros(n_unique_times)
+    efron_estimator = np.unique(time[event==1]) #np.zeros(n_unique_times)
+    unique_event_times = np.unique(time[event==1]) #np.zeros(n_unique_times)
 
     for i in range(samples):
 
         risk_set_sum += partial_hazard[i]
+    
     q = 0
 
     for i in range(samples):
@@ -323,9 +328,32 @@ def efron_baseline_estimator(log_partial_hazard, time, event):
 
         unique_event_times[q] = previous_time
 
-    cum_hazard_baseline = efron_estimator #double check this np.cumsum(efron_estimator)
-    baseline_survival = np.exp(-cum_hazard_baseline)
-    return uniq_times, cum_hazard_baseline, baseline_survival
+    # estimator += (death_set_count * unique_death_times) / denominator
+    # estimator = np.cumsum(estimator)
+    #print('q value at the end', q)
+    # If for a certain time the event value is always zero it is not captured
+    # In that case we add that value
+
+    # TODO: Adapt unique_event_times for the time that might be missing
+    # time does not seem to be sorted anymore
+    cum_hazard_baseline_final = efron_estimator.copy()
+    #print('shape cum_hazard_baseline_final', cum_hazard_baseline_final.shape)
+    for t in uniq_times:
+        if t not in unique_event_times:
+            thres = t
+            print('thres', thres)
+            try:
+                ind = np.argmax(unique_event_times[unique_event_times <= thres])
+            except:
+                ind = 0
+            #print('ind', ind)
+            #print('shape cum_hazard_baseline_final', cum_hazard_baseline_final.shape)
+            val = cum_hazard_baseline_final[ind]
+            cum_hazard_baseline_final = np.insert(cum_hazard_baseline_final, ind, val)
+    #cum_hazard_baseline = efron_estimator #double check this np.cumsum(efron_estimator)
+    baseline_survival = np.exp(-cum_hazard_baseline_final) #verify if this is not repeated
+    #print(len(uniq_times), len(unique_event_times), len(cum_hazard_baseline_final), len(baseline_survival))
+    return uniq_times, cum_hazard_baseline_final, baseline_survival
 
 
 

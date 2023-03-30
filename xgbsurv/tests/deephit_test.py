@@ -7,7 +7,7 @@ from jax import grad, hessian
 import pytest
 
 
-# loss
+# deephit loss 1
 
 def test_deephit_loss_1(deephit_data):
     time, event, target, phi = deephit_data
@@ -75,3 +75,13 @@ def test_deephit_hessian(deephit_data):
     hessian_precalculated = np.array(list(d.values())).T
     print(hessian_precalculated)
     assert np.allclose(hessian_own, hessian_precalculated)
+
+
+# deephit loss 2: rank loss
+
+def test_deephit_loss_2(deephit_data):
+    time, event, target, phi = deephit_data
+    loss_own = deephit_loss1_pycox(target, phi)
+    # loss from pycox: nll_pmf(*,reduction='sum')
+    loss_precalculated = 31.7249 # enter value here
+    assert np.allclose(loss_own, loss_precalculated)

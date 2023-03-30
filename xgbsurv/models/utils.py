@@ -58,14 +58,13 @@ def transform_back(y: npt.NDArray[float]) -> tuple[npt.NDArray[float], npt.NDArr
     event = event.astype(np.int64) # for numba
     return time, event
 
-#@jit(nopython=True)
+@jit(nopython=True)
 def sort_X_y(X, y):
     # naming convention as in sklearn
-    # maybe move to utils
     # add sorting here, maybe there is a faster way
-    is_sorted = lambda a: np.all(a[:-1] <= a[1:])
-    y_abs = abs(y)
-    if is_sorted(y_abs) is False:
+    y_abs = np.absolute(y)
+    if np.all(np.diff(y_abs) >= 0) is False:
+        #print('Values are being sorted!')
         order = np.argsort(y_abs, kind="mergesort")
         y = y[order]
         X = X[order]

@@ -324,7 +324,7 @@ def aft_objective(
         hessian_modification_strategy=hessian_modification_strategy
     )
     return np.negative(gradient), np.ones(hessian.shape)
-    # return np.negative(gradient), modify_hessian(
+    # return np.negative(gradient), modify_hessian( auf eps setzen
     #     hessian=np.negative(hessian),
     #     hessian_modification_strategy=hessian_modification_strategy
     # )

@@ -52,6 +52,7 @@ class XGBSurv(XGBRegressor):
 
         X, y = self._sort_X_y(X,y)
         self.y = y
+        self.X = X
         # deephit multioutput
         # so far this creates errors
         # if self.model_type=='deephit_objective':
@@ -84,10 +85,11 @@ class XGBSurv(XGBRegressor):
     def predict_cumulative_hazard_function(self, X, dataframe=False):
         if self.model_type:
             # TODO: Set output margin
+            self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
             self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
             self.predictor = pred_dict[str(self.model_type)]
             # fit only with training hazards?
-            est = self.predictor().fit(self.pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
+            est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
             self.uniq_times, self.cum_hazard_baseline = est.get_cumulative_hazard_function()
             # sample hazards have to repeated to get prediction for each individual
             self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
@@ -107,12 +109,15 @@ class XGBSurv(XGBRegressor):
     def predict_survival_function(self, X, dataframe=False):
 
         if self.cum_hazard_baseline is None:
+            self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
             self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
             self.predictor = pred_dict[str(self.model_type)]
             # fit only with training hazards?
-            est = self.predictor().fit(self.pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
+            est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
             self.uniq_times, self.cum_hazard_baseline = est.get_cumulative_hazard_function()
-
+            # sample hazards have to repeated to get prediction for each individual
+            self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
+           
         self.pred_survival = np.exp(-self.pred_cum_hazards)
         times = np.tile(self.uniq_times,(self.pred_survival.shape[0],1))
         if dataframe:
@@ -132,15 +137,15 @@ class XGBSurv(XGBRegressor):
     def get_objective_functions(self):
         return objective_dict
     
+
     def _sort_X_y(self, X, y):
         # naming convention as in sklearn
-        # maybe move to utils
         # add sorting here, maybe there is a faster way
-        is_sorted = lambda a: np.all(a[:-1] <= a[1:])
-        y_abs = abs(y)
-        if is_sorted(y_abs) is False:
+        y_abs = np.absolute(y)
+        if np.all(np.diff(y_abs) >= 0) is False:
+            #print('Values are being sorted!')
             order = np.argsort(y_abs, kind="mergesort")
             y = y[order]
             X = X[order]
         return X, y
-        
+            
