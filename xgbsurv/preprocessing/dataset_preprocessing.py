@@ -1,4 +1,6 @@
 import pandas as pd
+import numpy as np
+from xgbsurv.models.utils import KaplanMeier
 
 # original data is taken from pycox
 # https://github.com/havakv/pycox/tree/master/pycox/datasets
@@ -7,7 +9,14 @@ def metabric_preprocess(path="add your path here"):
     filename="original_data/METABRIC_pycox_full.csv"
     df = pd.read_csv(path+filename)
     # name columns
-    df.columns = ['MKI67', 'EGFR', 'PGR', 'ERBB2', 'hormone_treatment', 'radiotherapy', 'chemotherapy', 'ER_positive', 'age', 'time', 'event']
+    df.columns = ['MKI67', 'EGFR', 'PGR', 'ERBB2', 
+                  'hormone_treatment', 
+                  'radiotherapy', 
+                  'chemotherapy', 
+                  'ER_positive', 
+                  'age', 
+                  'time',
+                  'event']
     # remove zero time observations
     df = df[df.time!=0]
     # sort data
@@ -16,7 +25,92 @@ def metabric_preprocess(path="add your path here"):
     df.to_csv(path+"data/METABRIC_adapted.csv", index=False)
     return
 
-#metabric_preprocess()
+def flchain_preprocess(path="add your path here"):
+    filename="original_data/FLCHAIN_full.csv"
+    df = pd.read_csv(path+filename)
+    # drop death cause column
+    df.drop('chapter', inplace=True, axis=1)
+    # name columns
+    df.columns = [
+        "age",
+        "sex",
+        "sample_yr",
+        "kappa",
+        "lambda",
+        "flc_grp",
+        "creatinine",
+        "mgus",
+        "time", 
+        "event"
+        ]
+    # remove zero time observations
+    df = df[df.time!=0]
+    # sort data
+    df.sort_values(by='time', ascending=True, inplace=True)
+    # save data
+    df.to_csv(path+"data/FLCHAIN_adapted.csv", index=False)
+    return
+
+
+def rgbsg_preprocess(path="add your path here"):
+    filename="original_data/RGBSG_pycox_full.csv"
+    df = pd.read_csv(path+filename)
+    # drop death cause column
+    # name columns
+    df.columns = [
+        "horm_treatment",
+        "grade",
+        "menopause",
+        "age",
+        "n_positive_nodes",
+        "progesterone",
+        "estrogene",
+        "time",
+        "event"
+        ]
+    # remove zero time observations
+    df = df[df.time!=0]
+    # sort data
+    df.sort_values(by='time', ascending=True, inplace=True)
+    # save data
+    df.to_csv(path+"data/RGBSG_adapted.csv", index=False)
+    return
+
+def support_preprocess(path="add your path here"):
+    filename="original_data/SUPPORT_pycox_full.csv"
+    df = pd.read_csv(path+filename)
+    # drop death cause column
+    # name columns
+    df.columns = [
+        "age",
+        "sex",
+        "race",
+        "n_comorbidities",	
+        "diabetes",
+        "dementia",
+        "cancer",
+        "blood_pressure",
+        "heart_rate",
+        "respiration_rate",
+        "temperature",
+        "white_blood_cell",
+        "serum_sodium",
+        "serum_creatinine",
+        "time",
+        "event"
+        ]
+    # remove zero time observations
+    df = df[df.time!=0]
+    # sort data
+    df.sort_values(by='time', ascending=True, inplace=True)
+    # save data
+    df.to_csv(path+"data/SUPPORT_adapted.csv", index=False)
+    return
+
+#rgbsg_preprocess(path="")
+#metabric_preprocess(path="")
+#flchain_preprocess(path="")
+#support_preprocess(path="")
 
 # discretizer for Deephit
 def discretizer_df(df, n_cuts=10, type = 'equidistant', min_time=0.0) -> pd.DataFrame:
@@ -52,6 +146,7 @@ def discretizer_df(df, n_cuts=10, type = 'equidistant', min_time=0.0) -> pd.Data
         with Neural Networks. arXiv preprint arXiv:1910.06724, 2019.
         https://arxiv.org/pdf/1910.06724.pdf
     """
+    # TODO: Add check for pd dataframe, adapt for data, target structure
     if 'time' and 'event' not in df.columns:
         raise ValueError('Required columns are not in dataframe.')
     elif df.time.min()==0:

@@ -8,6 +8,8 @@ from xgbsurv.models.deephit_pycox_final import deephit_loss1_pycox, deephit_pyco
 DeephitPredictor
 from xgbsurv.models.eh_aft_final import aft_likelihood, aft_objective, \
 AftPredictor
+from xgbsurv.models.eh_ah_final import ah_likelihood, ah_objective, \
+AhPredictor
 from xgboost import XGBRegressor
 import numpy as np
 import pandas as pd
@@ -15,11 +17,14 @@ from sklearn.model_selection import train_test_split
 # dicts of objective, loss and prediction functions
 
 loss_dict= {'breslow_loss': breslow_likelihood, 'efron_loss': efron_likelihood, \
-            'cind_loss': cind_loss, 'deephit_loss':deephit_loss1_pycox, 'aft_loss':aft_likelihood}
+            'cind_loss': cind_loss, 'deephit_loss':deephit_loss1_pycox, \
+            'aft_loss':aft_likelihood, 'ah_loss':ah_likelihood}
 objective_dict= {'breslow_objective': breslow_objective, 'efron_objective': efron_objective, \
-                 'cind_objective': cind_objective, 'deephit_objective':deephit_pycox_objective, 'aft_objective':aft_objective}
+                 'cind_objective': cind_objective, 'deephit_objective':deephit_pycox_objective, \
+                'aft_objective':aft_objective, 'ah_objective':ah_objective}
 pred_dict = {'breslow_objective': BreslowPredictor, 'efron_objective': EfronPredictor,\
-              'cind_objective': CindPredictor, 'deephit_objective': DeephitPredictor, 'aft_objective':AftPredictor}
+              'cind_objective': CindPredictor, 'deephit_objective': DeephitPredictor, \
+            'aft_objective':AftPredictor, 'ah_objective':AhPredictor}
 
 
 

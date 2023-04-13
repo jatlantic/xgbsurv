@@ -36,9 +36,9 @@ def deephit_loss1_pycox(y, phi)->float:
     # s is the time
     #time, event = transform_back(y)
     #event = event.dtype('float32')
-    print('phi', phi.shape)
+    #print('phi', phi.shape)
     y = y.reshape(phi.shape)
-    print('loss y shape', y.shape)
+    #print('loss y shape', y.shape)
     y = y[:,0]
     time, event = transform_back(y)
     epsilon = 1e-7
@@ -70,7 +70,7 @@ def deephit_loss1_pycox(y, phi)->float:
     #print('part3',part3)
     loss = - (part1 + part2 + part3) # beware minus sign
     deephit_loss_1 = np.sum(loss)
-    print('deephit_loss_1', deephit_loss_1)
+    #print('deephit_loss_1', deephit_loss_1)
     return deephit_loss_1
 
 
@@ -141,15 +141,15 @@ def pycox_second_deriv_no_gamma(y, phi):
     return -part1[:,:-1]
 
 def deephit_pycox_objective(y, phi):
-    print(phi.shape)
+    #print(phi.shape)
     y = y.reshape(phi.shape)
     y = y[:,0]
-    print(y.shape)
+    #print(y.shape)
     grad = pycox_gradient_no_gamma(y, phi).reshape(-1)
     hess = pycox_second_deriv_no_gamma(y, phi).reshape(-1)
     #hess = np.ones(grad.shape)
-    print(grad.shape)
-    print(hess.shape)
+    #print(grad[-5:])
+    #print(hess)
     return grad, hess
 
 

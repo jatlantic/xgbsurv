@@ -18,18 +18,20 @@ CDF_ZERO: float = 0.5
 # preset bandwidth trough bandwidth function
 #  and sample_weight for now
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def bandwidth_function(time, event, n):
-    return (8*(sqrt(2)/3))**(1/5)*n**(-1/5)
+    b = (8*(sqrt(2)/3))**(1/5)*n**(-1/5)
+    #print(b)
+    return b
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def aft_likelihood(
     y: np.array, 
     linear_predictor: np.array,
     sample_weight: np.array = 1.0,
 ) -> np.array:
     
-    print('linear predictor', linear_predictor)
+    #print('linear predictor', linear_predictor)
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
     bandwidth: float = bandwidth_function(time=time, event=event, n=n_samples)
@@ -59,18 +61,18 @@ def aft_likelihood(
     return -likelihood
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def gaussian_integrated_kernel(x):
     return 0.5 * (1 + erf(x / SQRT_TWO))
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def gaussian_kernel(x):
     # return (1 / sqrt(2 * 3.14159)) * exp(-1 / 2 * (x**2))
     return PDF_PREFACTOR * exp(-0.5 * (x**2))
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def kernel(a, b, bandwidth):
     kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
     # intermediate_result: np.array = np.subtract.outer(a, b) / bandwidth
@@ -80,7 +82,7 @@ def kernel(a, b, bandwidth):
     return kernel_matrix
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def integrated_kernel(a, b, bandwidth):
     integrated_kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
     # intermediate_result: np.array = np.subtract.outer(a, b) / bandwidth
@@ -92,7 +94,7 @@ def integrated_kernel(a, b, bandwidth):
     return integrated_kernel_matrix
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def difference_kernels(a, b, bandwidth):
     difference: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
     kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
@@ -129,13 +131,13 @@ def modify_hessian(hessian: np.array, hessian_modification_strategy: str):
     return hessian
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def aft_objective(
     y: np.array,
     linear_predictor: np.array,
     sample_weight: np.array = 1.0,
     #bandwidth: float,
-    hessian_modification_strategy: str = "ignore",
+    hessian_modification_strategy: str = "ignore"
 ):
     time, event = transform_back(y)
     linear_predictor: np.array = np.exp(sample_weight * linear_predictor)
@@ -315,15 +317,17 @@ def aft_objective(
             gradient[_] = gradient_three
             hessian[_] = hessian_five + hessian_six
 
-    print('hessian', modify_hessian(
-        hessian=np.negative(hessian),
-        hessian_modification_strategy=hessian_modification_strategy
-    ))
-    hessian = modify_hessian(
-        hessian=np.negative(hessian),
-        hessian_modification_strategy=hessian_modification_strategy
-    )
-    return np.negative(gradient), np.ones(hessian.shape)
+    print('gradient', gradient)
+    # print('hessian', modify_hessian(
+    #     hessian=np.negative(hessian),
+    #     hessian_modification_strategy=hessian_modification_strategy
+    # ))
+    # hessian = modify_hessian(
+    #     hessian=np.negative(hessian),
+    #     hessian_modification_strategy=hessian_modification_strategy
+    # )
+    # try without negative for gradient
+    return  np.negative(gradient)/np.linalg.norm(np.negative(gradient)), np.ones(gradient.shape)
     # return np.negative(gradient), modify_hessian( auf eps setzen
     #     hessian=np.negative(hessian),
     #     hessian_modification_strategy=hessian_modification_strategy
@@ -347,7 +351,4 @@ class AftPredictor():
         raise NotImplementedError("This model does not provide for the function you asked for!")
 
     def get_survival_function(self):
-        raise NotImplementedError("This model does not provide for the function you asked for!")
-
-    def get_survival_function_own(self, partial_hazard):
         raise NotImplementedError("This model does not provide for the function you asked for!")
