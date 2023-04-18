@@ -2,12 +2,13 @@ from typing import Tuple, Callable
 from xgbsurv.models.utils import transform, transform_back
 import numpy as np
 from numba import jit
+
 # verify if below are really required?
 from scipy.stats import norm
 from sklearn.utils.extmath import safe_sparse_dot
 from typeguard import typechecked
 
-from math import exp, sqrt, pi, erf
+from math import exp, sqrt, pi, erf, pow
 from numba import jit
 
 PDF_PREFACTOR: float = 0.3989424488876037
@@ -15,26 +16,15 @@ SQRT_TWO: float = 1.4142135623730951
 SQRT_EPS: float = 1.4901161193847656e-08
 CDF_ZERO: float = 0.5
 
-# preset bandwidth trough bandwidth function
-#  and sample_weight for now
-
-@jit(nopython=True, cache=True, fastmath=True)
-def bandwidth_function(time, event, n):
-    b = (8*(sqrt(2)/3))**(1/5)*n**(-1/5)
-    #print(b)
-    return b
-
 @jit(nopython=True, cache=True, fastmath=True)
 def aft_likelihood(
-    y: np.array, 
+    y: np.array,
     linear_predictor: np.array,
     sample_weight: np.array = 1.0,
 ) -> np.array:
-    
-    #print('linear predictor', linear_predictor)
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
-    bandwidth: float = bandwidth_function(time=time, event=event, n=n_samples)
+    bandwidth = 1.30 * pow(n_samples, -0.2)
     linear_predictor: np.array = linear_predictor * sample_weight
     R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
@@ -68,24 +58,25 @@ def gaussian_integrated_kernel(x):
 
 @jit(nopython=True, cache=True, fastmath=True)
 def gaussian_kernel(x):
-    # return (1 / sqrt(2 * 3.14159)) * exp(-1 / 2 * (x**2))
     return PDF_PREFACTOR * exp(-0.5 * (x**2))
 
 
 @jit(nopython=True, cache=True, fastmath=True)
 def kernel(a, b, bandwidth):
     kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
-    # intermediate_result: np.array = np.subtract.outer(a, b) / bandwidth
     for ix in range(a.shape[0]):
         for qx in range(b.shape[0]):
-            kernel_matrix[ix, qx] = gaussian_kernel((a[ix] - b[qx]) / bandwidth)
+            kernel_matrix[ix, qx] = gaussian_kernel(
+                (a[ix] - b[qx]) / bandwidth
+            )
     return kernel_matrix
 
 
 @jit(nopython=True, cache=True, fastmath=True)
 def integrated_kernel(a, b, bandwidth):
-    integrated_kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
-    # intermediate_result: np.array = np.subtract.outer(a, b) / bandwidth
+    integrated_kernel_matrix: np.array = np.empty(
+        shape=(a.shape[0], b.shape[0])
+    )
     for ix in range(a.shape[0]):
         for qx in range(b.shape[0]):
             integrated_kernel_matrix[ix, qx] = gaussian_integrated_kernel(
@@ -98,8 +89,9 @@ def integrated_kernel(a, b, bandwidth):
 def difference_kernels(a, b, bandwidth):
     difference: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
     kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
-    integrated_kernel_matrix: np.array = np.empty(shape=(a.shape[0], b.shape[0]))
-    # intermediate_result: np.array = np.subtract.outer(a, b) / bandwidth
+    integrated_kernel_matrix: np.array = np.empty(
+        shape=(a.shape[0], b.shape[0])
+    )
     for ix in range(a.shape[0]):
         for qx in range(b.shape[0]):
             difference[ix, qx] = (a[ix] - b[qx]) / bandwidth
@@ -111,47 +103,31 @@ def difference_kernels(a, b, bandwidth):
     return difference, kernel_matrix, integrated_kernel_matrix
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
-def modify_hessian(hessian: np.array, hessian_modification_strategy: str):
-    if not np.any(hessian < 0):
-        return hessian
-    if hessian_modification_strategy == "ignore":
-        hessian[hessian < 0] = 0
-    elif hessian_modification_strategy == "eps":
-        hessian[hessian < 0] = SQRT_EPS
-    elif hessian_modification_strategy == "flip":
-        hessian[hessian < 0] = np.abs(hessian[hessian < 0])
-    elif hessian_modification_strategy is None:
-        return hessian
-    else:
-        raise ValueError(
-            "Expected `hessian_modification_strategy` to be one of ['ignore', 'eps', 'flip']."
-            + f"Found {hessian_modification_strategy} instead."
-        )
+@jit(nopython=True, cache=True, fastmath=True)
+def modify_hessian(hessian: np.array):
+    if np.any(hessian < 0):
+        hessian[hessian < 0] = np.mean(hessian[hessian > 0])
     return hessian
 
 
 @jit(nopython=True, cache=True, fastmath=True)
 def aft_objective(
-    y: np.array,
-    linear_predictor: np.array,
-    sample_weight: np.array = 1.0,
-    #bandwidth: float,
-    hessian_modification_strategy: str = "ignore"
+    y: np.array, linear_predictor: np.array, sample_weight: np.array = 1.0
 ):
     time, event = transform_back(y)
     linear_predictor: np.array = np.exp(sample_weight * linear_predictor)
     linear_predictor = np.log(time * linear_predictor)
     n_samples: int = time.shape[0]
-    bandwidth: float = bandwidth_function(time=time, event=event, n=n_samples)
-    #print('bandwidth', bandwidth)
+    bandwidth = 1.30 * pow(n_samples, -0.2)
     gradient: np.array = np.empty(n_samples)
     hessian: np.array = np.empty(n_samples)
     event_mask: np.array = event.astype(np.bool_)
     inverse_sample_size: float = 1 / n_samples
     inverse_bandwidth: float = 1 / bandwidth
     squared_inverse_bandwidth: float = inverse_bandwidth**2
-    inverse_sample_size_bandwidth: float = inverse_sample_size * inverse_bandwidth
+    inverse_sample_size_bandwidth: float = (
+        inverse_sample_size * inverse_bandwidth
+    )
 
     zero_kernel: float = PDF_PREFACTOR
     event_count: int = 0
@@ -166,21 +142,30 @@ def aft_objective(
     )
 
     squared_kernel_matrix: np.array = np.square(kernel_matrix)
-    squared_difference_outer_product: np.array = np.square(difference_outer_product)
+    squared_difference_outer_product: np.array = np.square(
+        difference_outer_product
+    )
 
     kernel_numerator_full: np.array = (
         kernel_matrix * difference_outer_product * inverse_bandwidth
     )
-    squared_kernel_numerator: np.array = np.square(kernel_numerator_full[event_mask, :])
+    squared_kernel_numerator: np.array = np.square(
+        kernel_numerator_full[event_mask, :]
+    )
 
-    squared_difference_kernel_numerator: np.array = kernel_matrix[event_mask, :] * (
-        squared_difference_outer_product[event_mask, :] * squared_inverse_bandwidth
+    squared_difference_kernel_numerator: np.array = kernel_matrix[
+        event_mask, :
+    ] * (
+        squared_difference_outer_product[event_mask, :]
+        * squared_inverse_bandwidth
     )
 
     kernel_denominator: np.array = kernel_matrix[event_mask, :].sum(axis=0)
     squared_kernel_denominator: np.array = np.square(kernel_denominator)
 
-    integrated_kernel_denominator: np.array = integrated_kernel_matrix.sum(axis=0)
+    integrated_kernel_denominator: np.array = integrated_kernel_matrix.sum(
+        axis=0
+    )
     squared_integrated_kernel_denominator: np.array = np.square(
         integrated_kernel_denominator
     )
@@ -191,7 +176,9 @@ def aft_objective(
         gradient_three = -(
             inverse_sample_size
             * (
-                kernel_matrix[_, :] * inverse_bandwidth / integrated_kernel_denominator
+                kernel_matrix[_, :]
+                * inverse_bandwidth
+                / integrated_kernel_denominator
             ).sum()
         )
         hessian_five = (
@@ -263,19 +250,26 @@ def aft_objective(
                 )
             )
 
-            prefactor: float = kernel_numerator_full[event_mask, event_count].sum() / (
-                kernel_denominator[event_count]
-            )
+            prefactor: float = kernel_numerator_full[
+                event_mask, event_count
+            ].sum() / (kernel_denominator[event_count])
 
             gradient_two = inverse_sample_size * prefactor
             hessian_three = -inverse_sample_size * (prefactor**2)
 
             hessian_four = inverse_sample_size * (
                 (
-                    ((squared_difference_kernel_numerator[:, event_count]).sum())
+                    (
+                        (
+                            squared_difference_kernel_numerator[:, event_count]
+                        ).sum()
+                    )
                     - (
                         squared_inverse_bandwidth
-                        * ((kernel_matrix[event_mask, event_count]).sum() - zero_kernel)
+                        * (
+                            (kernel_matrix[event_mask, event_count]).sum()
+                            - zero_kernel
+                        )
                     )
                 )
                 / (kernel_denominator[event_count])
@@ -289,7 +283,9 @@ def aft_objective(
 
             hessian_seven = inverse_sample_size * (prefactor**2)
             hessian_eight = inverse_sample_size * (
-                (kernel_numerator_full[:, event_count] * inverse_bandwidth).sum()
+                (
+                    kernel_numerator_full[:, event_count] * inverse_bandwidth
+                ).sum()
                 / integrated_kernel_denominator[event_count]
             )
 
@@ -316,39 +312,30 @@ def aft_objective(
         else:
             gradient[_] = gradient_three
             hessian[_] = hessian_five + hessian_six
-
-    print('gradient', gradient)
-    # print('hessian', modify_hessian(
-    #     hessian=np.negative(hessian),
-    #     hessian_modification_strategy=hessian_modification_strategy
-    # ))
-    # hessian = modify_hessian(
-    #     hessian=np.negative(hessian),
-    #     hessian_modification_strategy=hessian_modification_strategy
-    # )
-    # try without negative for gradient
-    return  np.negative(gradient)/np.linalg.norm(np.negative(gradient)), np.ones(gradient.shape)
-    # return np.negative(gradient), modify_hessian( auf eps setzen
-    #     hessian=np.negative(hessian),
-    #     hessian_modification_strategy=hessian_modification_strategy
-    # )
+    grad = np.negative(gradient)
+    hess = modify_hessian(np.negative(hessian))
+    return grad, hess
 
 
-
-class AftPredictor():
+class AftPredictor:
     """Prediction functions particular to the Cox PH model"""
-    
+
     def __init__(self) -> None:
         self.uniq_times = None
         self.cum_hazard_baseline = None
         self.baseline_survival = None
-        
-    
+
     def fit(self, partial_hazard, y):
-        raise NotImplementedError("This model does not provide for the function you asked for!")
+        raise NotImplementedError(
+            "This model does not provide for the function you asked for!"
+        )
 
     def get_cumulative_hazard_function(self):
-        raise NotImplementedError("This model does not provide for the function you asked for!")
+        raise NotImplementedError(
+            "This model does not provide for the function you asked for!"
+        )
 
     def get_survival_function(self):
-        raise NotImplementedError("This model does not provide for the function you asked for!")
+        raise NotImplementedError(
+            "This model does not provide for the function you asked for!"
+        )
