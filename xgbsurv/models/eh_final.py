@@ -174,6 +174,157 @@ def modify_hessian(hessian: np.array, hessian_modification_strategy: str):
     return hessian
 
 
+
+@jit(nopython=True, cache=True, fastmath=True)
+def eh_gradient(
+    # y and linear predictor contain two cols
+    y: np.array,
+    linear_predictor: np.array,
+    sample_weight: np.array = 1.0,
+) -> np.array:
+    time, event = transform_back(y[:,0])
+    n_samples: int = time.shape[0]
+    bandwidth = 1.30 * math.pow(n_samples, -0.2)
+    linear_predictor_1: np.array = np.exp(linear_predictor[:, 0] * sample_weight)
+    linear_predictor_2: np.array = np.exp(linear_predictor[:, 1] * sample_weight)
+    linear_predictor_vanilla: np.array = linear_predictor_2 / linear_predictor_1
+    linear_predictor = np.log(time * linear_predictor_1)
+    n_events: int = np.sum(event)
+    gradient: np.array = np.empty(n_samples)
+    hessian: np.array = np.empty(n_samples)
+    event_mask: np.array = event.astype(np.bool_)
+    inverse_sample_size: float = 1 / n_samples
+    inverse_bandwidth: float = 1 / bandwidth
+    squared_inverse_bandwidth: float = inverse_bandwidth**2
+
+    zero_kernel: float = PDF_PREFACTOR
+    zero_integrated_kernel: float = CDF_ZERO
+    event_count: int = 0
+
+    (
+        difference_outer_product,
+        kernel_matrix,
+        integrated_kernel_matrix,
+    ) = difference_kernels(
+        a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
+    )
+
+    squared_difference_outer_product: np.array = np.square(
+        difference_outer_product
+    )
+
+    sample_repeated_linear_predictor: np.array = (
+        linear_predictor_vanilla.repeat(n_events).reshape(
+            (n_samples, n_events)
+        )
+    )
+
+    kernel_numerator_full: np.array = (
+        kernel_matrix * difference_outer_product * inverse_bandwidth
+    )
+    # squared_kernel_numerator: np.array = np.square(
+    #     kernel_numerator_full[event_mask, :]
+    # )
+
+    # squared_difference_kernel_numerator: np.array = kernel_matrix[
+    #     event_mask, :
+    # ] * (
+    #     squared_difference_outer_product[event_mask, :]
+    #     * squared_inverse_bandwidth
+    # )
+
+    kernel_denominator: np.array = kernel_matrix[event_mask, :].sum(axis=0)
+    squared_kernel_denominator: np.array = np.square(kernel_denominator)
+
+    integrated_kernel_denominator: np.array = (
+        integrated_kernel_matrix * sample_repeated_linear_predictor
+    ).sum(axis=0)
+
+    for _ in range(n_samples):
+        sample_event: int = event[_]
+        gradient_three = -(
+            inverse_sample_size
+            * (
+                (
+                    linear_predictor_vanilla[_]
+                    * integrated_kernel_matrix[_, :]
+                    + linear_predictor_vanilla[_]
+                    * kernel_matrix[_, :]
+                    * inverse_bandwidth
+                )
+                / integrated_kernel_denominator
+            ).sum()
+        )
+
+
+
+        if sample_event:
+            gradient_correction_factor = inverse_sample_size * (
+                (
+                    linear_predictor_vanilla[_] * zero_integrated_kernel
+                    + linear_predictor_vanilla[_]
+                    * zero_kernel
+                    * inverse_bandwidth
+                )
+                / integrated_kernel_denominator[event_count]
+            )
+
+
+            gradient_one = -(
+                inverse_sample_size
+                * (
+                    kernel_numerator_full[
+                        _,
+                    ]
+                    / kernel_denominator
+                ).sum()
+            )
+
+
+
+            prefactor: float = kernel_numerator_full[
+                event_mask, event_count
+            ].sum() / (kernel_denominator[event_count])
+
+            gradient_two = inverse_sample_size * prefactor
+
+            prefactor = (
+                (
+                    (
+                        linear_predictor_vanilla
+                        * kernel_matrix[:, event_count]
+                    ).sum()
+                    - linear_predictor_vanilla[_] * zero_kernel
+                )
+                * inverse_bandwidth
+                - (linear_predictor_vanilla[_] * zero_integrated_kernel)
+            ) / integrated_kernel_denominator[event_count]
+            gradient_four = inverse_sample_size * prefactor
+
+            gradient_five = -(inverse_sample_size * (
+                    linear_predictor_vanilla[_] * zero_integrated_kernel 
+                    / integrated_kernel_denominator[event_count]
+                ).sum())
+
+            gradient[_] = (
+                gradient_one
+                + gradient_two
+                + gradient_three
+                + gradient_four
+                + gradient_correction_factor
+                + gradient_five
+                ) 
+                #- inverse_sample_size # potentially remove this n/Delta_q
+
+            event_count += 1
+
+        else:
+            gradient[_] = gradient_three
+
+    return np.negative(gradient)
+    
+
+
 @jit(nopython=True, cache=True, fastmath=True)
 def eh_objective(
     y: np.array,
