@@ -301,10 +301,10 @@ def eh_gradient(
             ) / integrated_kernel_denominator[event_count]
             gradient_four = inverse_sample_size * prefactor
 
-            gradient_five = -(inverse_sample_size * (
+            gradient_five = inverse_sample_size * (
                     linear_predictor_vanilla[_] * zero_integrated_kernel 
                     / integrated_kernel_denominator[event_count]
-                ).sum())
+                ).sum()
 
             gradient[_] = (
                 gradient_one
