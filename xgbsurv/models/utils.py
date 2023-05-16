@@ -10,7 +10,7 @@ import pandas as pd
 import numpy.typing as npt
 
 
-@jit(nopython=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def transform(time: npt.NDArray[float], event: npt.NDArray[int]) -> npt.NDArray[float]:
     """Transforms time, event into XGBoost digestable format.
 
@@ -39,7 +39,7 @@ def transform(time: npt.NDArray[float], event: npt.NDArray[int]) -> npt.NDArray[
 
 
 
-@jit(nopython=True) # not really needed
+@jit(nopython=True, cache=True, fastmath=True) # not really needed
 def transform_back(y: npt.NDArray[float]) -> tuple[npt.NDArray[float], npt.NDArray[int]]:
     """Transforms XGBoost digestable format variable y into time and event.
 

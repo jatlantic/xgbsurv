@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 from xgbsurv.models.utils import KaplanMeier
+import os
+from sklearn.preprocessing import OrdinalEncoder
+from sklearn.preprocessing import LabelEncoder
 
 # original data is taken from pycox
 # https://github.com/havakv/pycox/tree/master/pycox/datasets
@@ -30,6 +33,11 @@ def flchain_preprocess(path="add your path here"):
     df = pd.read_csv(path+filename)
     # drop death cause column
     df.drop('chapter', inplace=True, axis=1)
+    # there is one column with NA values (17%)
+    # we will fill this with the median
+    df['creatinine'] = df['creatinine'].fillna(df['creatinine'].median())
+    # make gender column 0,1, i.e. make data numerical
+    df['sex'] = LabelEncoder().fit_transform(df['sex'])
     # name columns
     df.columns = [
         "age",
@@ -111,6 +119,36 @@ def support_preprocess(path="add your path here"):
 #metabric_preprocess(path="")
 #flchain_preprocess(path="")
 #support_preprocess(path="")
+
+
+def tcga_preprocess(path="add your path here"):
+    cancer_names = ['BLCA',
+    'BRCA',
+    'HNSC',
+    'KIRC',
+    'LGG',
+    'LIHC',
+    'LUAD',
+    'LUSC',
+    'OV',
+    'STAD']
+    print(os.getcwd())
+    for name in cancer_names:
+        filename="original_data/TCGA/"+name+'.csv'
+        df = pd.read_csv(path+filename)
+        # drop patient id column
+        df.drop(['patient_id'],axis=1, inplace=True)
+        # remove zero time observations
+        df = df[df.time!=0]
+        # sort data
+        df.sort_values(by='time', ascending=True, inplace=True)
+        # save data
+        df.to_csv(path+"data/"+name+"_adapted.csv", index=False)
+    return
+
+tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
+
+#/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/original_data/TCGA
 
 # discretizer for Deephit
 def discretizer_df(df, n_cuts=10, type = 'equidistant', min_time=0.0) -> pd.DataFrame:

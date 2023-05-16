@@ -10,6 +10,10 @@ from xgbsurv.models.eh_aft_final import aft_likelihood, aft_objective, \
 AftPredictor
 from xgbsurv.models.eh_ah_final import ah_likelihood, ah_objective, \
 AhPredictor
+from xgbsurv.models.eh_final import eh_likelihood, eh_objective
+#, \
+#EhPredictor
+from xgbsurv.models.utils import transform_back
 from xgboost import XGBRegressor
 import numpy as np
 import pandas as pd
@@ -18,10 +22,10 @@ from sklearn.model_selection import train_test_split
 
 loss_dict= {'breslow_loss': breslow_likelihood, 'efron_loss': efron_likelihood, \
             'cind_loss': cind_loss, 'deephit_loss':deephit_loss1_pycox, \
-            'aft_loss':aft_likelihood, 'ah_loss':ah_likelihood}
+            'aft_loss':aft_likelihood, 'ah_loss':ah_likelihood, 'eh_loss': eh_likelihood}
 objective_dict= {'breslow_objective': breslow_objective, 'efron_objective': efron_objective, \
                  'cind_objective': cind_objective, 'deephit_objective':deephit_pycox_objective, \
-                'aft_objective':aft_objective, 'ah_objective':ah_objective}
+                'aft_objective':aft_objective, 'ah_objective':ah_objective,'eh_objective':eh_objective}
 pred_dict = {'breslow_objective': BreslowPredictor, 'efron_objective': EfronPredictor,\
               'cind_objective': CindPredictor, 'deephit_objective': DeephitPredictor, \
             'aft_objective':AftPredictor, 'ah_objective':AhPredictor}
@@ -111,17 +115,22 @@ class XGBSurv(XGBRegressor):
         else:
             raise NotImplementedError("Cumulative hazard not applicable to the model you provided.")
     
-    def predict_survival_function(self, X, dataframe=False):
+    def predict_survival_function(self, X, test_times, dataframe=False):
 
         if self.cum_hazard_baseline is None:
+            time_train, event_train = transform_back(self.y)
             self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
             self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
             self.predictor = pred_dict[str(self.model_type)]
             # fit only with training hazards?
             est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
-            self.uniq_times, self.cum_hazard_baseline = est.get_cumulative_hazard_function()
+            self.uniq_times, self.cum_hazard_baseline_train = est.get_cumulative_hazard_function()
+            # take sample of the test data
+            cum_hazard_baseline_test = np.interp(np.unique(test_times), np.unique(time_train), self.cum_hazard_baseline_train)
+
             # sample hazards have to repeated to get prediction for each individual
-            self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
+            #self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
+            self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), cum_hazard_baseline_test)
            
         self.pred_survival = np.exp(-self.pred_cum_hazards)
         times = np.tile(self.uniq_times,(self.pred_survival.shape[0],1))

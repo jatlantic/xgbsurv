@@ -211,13 +211,62 @@ def breslow_estimator(log_hazard, time, event):
     # flatnonzero return indices that are nonzero in flattened version
     n_events = np.add.reduceat(event, breaks, axis=0)
 
-    # consider removing zero rows
+    # consider removing zero rows, would this be the right approach?
     risk_matrix = np.unique((np.outer(time,time)>=np.square(time)).astype(int).T, axis=0)
     denominator = np.sum(risk_score[None,:]*risk_matrix,axis=1)[::-1]     
 
     cum_hazard_baseline = np.cumsum(n_events / denominator)
     baseline_survival = np.exp(-cum_hazard_baseline)
     return uniq_times, cum_hazard_baseline, baseline_survival
+
+
+# Looped version of breslow estimator
+
+@jit(nopython=True, cache=True, fastmath=True)
+def breslow_estimator_breslow(    
+    predictor: np.array,
+    time: np.array,
+    event: np.array
+
+):
+    exp_predictor: np.array = np.exp(predictor)
+    local_risk_set: float = np.sum(exp_predictor)
+    event_mask: np.array = event.astype(np.bool_)
+    n_unique_events: int = np.unique(time[event_mask]).shape[0]
+    cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
+    n_events_counted: int = 0
+    local_death_set: int = 0
+    accumulated_risk_set: float = 0
+    previous_time: float = time[0]
+
+    for _ in range(len(time)):
+        sample_time: float = time[_]
+        sample_event: int = event[_]
+        sample_predictor: float = exp_predictor[_]
+
+        if sample_time > previous_time and local_death_set:
+            cumulative_baseline_hazards[n_events_counted] = local_death_set / (
+                local_risk_set
+            )
+
+            local_death_set = 0
+            local_risk_set -= accumulated_risk_set
+            accumulated_risk_set = 0
+            n_events_counted += 1
+
+        if sample_event:
+            local_death_set += 1
+        accumulated_risk_set += sample_predictor
+        previous_time = sample_time
+
+    cumulative_baseline_hazards[n_events_counted] = local_death_set / (
+        local_risk_set
+    )
+
+    return (
+        np.unique(time[event_mask]),
+        np.cumsum(cumulative_baseline_hazards),
+    )
 
 
 # Breslow Predictor
@@ -247,6 +296,32 @@ class BreslowPredictor(): # SET TIES OPTION
 
     def get_survival_function_own(self, partial_hazard):
         return self.uniq_times, np.exp(-self.cum_hazard_baseline)
+
+
+# class BreslowPredictor(): # SET TIES OPTION
+#     """Prediction functions particular to the Cox PH model"""
+    
+#     def __init__(self) -> None:
+#         self.uniq_times = None
+#         self.cum_hazard_baseline = None
+#         self.baseline_survival = None
+        
+    
+#     def fit(self, partial_hazard, y):
+#         # CALL BRESLOW FUNCTIOIN FROM UTILS, no take the one below
+#         time, event = transform_back(y)
+#         self.uniq_times, self.cum_hazard_baseline, self.baseline_survival = breslow_estimator(partial_hazard, time, event)
+#         print(self.uniq_times.shape, self.cum_hazard_baseline.shape)
+#         return self 
+
+#     def get_cumulative_hazard_function(self):
+#         return self.uniq_times, self.cum_hazard_baseline
+
+#     def get_survival_function(self):
+#         return self.uniq_times, self.baseline_survival
+
+#     def get_survival_function_own(self, partial_hazard):
+#         return self.uniq_times, np.exp(-self.cum_hazard_baseline)
 
 
 

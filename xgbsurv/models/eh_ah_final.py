@@ -13,6 +13,7 @@ import math
 PDF_PREFACTOR: float = 0.3989424488876037
 SQRT_TWO: float = 1.4142135623730951
 SQRT_EPS: float = 1.4901161193847656e-08
+EPS: float = 2.220446049250313e-16
 CDF_ZERO: float = 0.5
 
 
@@ -77,7 +78,9 @@ def modify_hessian(hessian: np.array):
 
 @jit(nopython=True, cache=True, fastmath=True)
 def ah_likelihood(
-    linear_predictor: np.array, time: np.array, event: np.array
+    y: np.array,
+    linear_predictor: np.array, 
+    sample_weight: np.array = 1.0,
 ) -> np.array:
     """Partial likelihood estimator for Accelerated Hazards model.
 
@@ -90,11 +93,14 @@ def ah_likelihood(
     Returns:
         np.array: Scalar value of mean partial log likelihood estimate.
     """
+    time, event = transform_back(y)
     n_samples: int = time.shape[0]
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     linear_predictor: np.array = linear_predictor
+    # attention wrt. -exp
     exp_linear_predictor: np.array = np.exp(-linear_predictor)
-    R_linear_predictor: np.array = np.log(time * exp_linear_predictor)
+    # this has to be separated
+    R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
     event_mask: np.array = event.astype(np.bool_)
 
@@ -112,7 +118,7 @@ def ah_likelihood(
     inverse_sample_size: float = 1 / n_samples
 
     kernel_sum: np.array = kernel_matrix.sum(axis=0)
-
+    #print('integrated kernel matrix', integrated_kernel_matrix)
     integrated_kernel_sum: np.array = (
         integrated_kernel_matrix
         * exp_linear_predictor.repeat(np.sum(event)).reshape(-1, np.sum(event))
@@ -127,7 +133,8 @@ def ah_likelihood(
 
 @jit(nopython=True, cache=True, fastmath=True)
 def ah_objective(
-    time: np.array, event: np.array, linear_predictor: np.array
+    y: np.array,
+    linear_predictor: np.array
 ) -> Tuple[np.array, np.array]:
     """Gradient of the Accelerated Hazards model in numba-compatible form.
 
@@ -142,6 +149,7 @@ def ah_objective(
         Tuple[np.array, np.array]: Tuple containing the negative gradients and the hessian
             of with the linear predictor.
     """
+    time, event = transform_back(y)
     n_samples: int = time.shape[0]
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     linear_predictor_vanilla: np.array = np.exp(-linear_predictor)
@@ -203,7 +211,7 @@ def ah_objective(
             inverse_sample_size
             * (
                 (
-                    linear_predictor_vanilla[_]
+                    -linear_predictor_vanilla[_]
                     * integrated_kernel_matrix[_, :]
                     + linear_predictor_vanilla[_]
                     * kernel_matrix[_, :]
@@ -395,6 +403,36 @@ def ah_objective(
     return np.negative(gradient), modify_hessian(hessian=np.negative(hessian))
 
 
+@jit(nopython=True, cache=True, fastmath=True)
+def baseline_hazard_estimator_ah(
+    time,
+    train_time,
+    train_event,
+    train_eta,
+):
+    n_samples: int = train_time.shape[0]
+    bandwidth = 1.30 * math.pow(n_samples, -0.2)
+    inverse_bandwidth: float = 1 / bandwidth
+    inverse_sample_size: float = 1 / n_samples
+    inverse_bandwidth_sample_size: float = (
+        inverse_sample_size * (1 / (time + EPS)) * inverse_bandwidth
+    )
+    log_time: float = time
+    R_lp: np.array = np.log(train_time * np.exp(train_eta))
+    difference_lp_log_time: np.array = (R_lp - log_time) / bandwidth
+    numerator: float = 0.0
+    denominator: float = 0.0
+    for _ in range(n_samples):
+        difference: float = difference_lp_log_time[_]
+        denominator += np.exp(-train_eta) * gaussian_integrated_kernel(difference)
+        if train_event[_]:
+            numerator += gaussian_kernel(difference)
+    numerator = inverse_bandwidth_sample_size * numerator
+    denominator = inverse_sample_size * denominator
+
+    return numerator / denominator
+
+
 class AhPredictor:
     """Prediction functions particular to the Cox PH model"""
 
@@ -402,6 +440,10 @@ class AhPredictor:
         self.uniq_times = None
         self.cum_hazard_baseline = None
         self.baseline_survival = None
+        # parts that D would recommend
+        self.train_linear_predictor = None
+        self.train_time = None
+        self.train_event = None
 
     def fit(self, partial_hazard, y):
         raise NotImplementedError(

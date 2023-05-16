@@ -1,0 +1,96 @@
+best_params_FLCHAIN,best_model_FLCHAIN,cindex_train_FLCHAIN,cindex_test_FLCHAIN
+"{'estimator__batch_size': 128, 'estimator__module__dropout': 0.28591724914948907, 'estimator__module__n_layers': 4, 'estimator__module__num_nodes': 128, 'estimator__optimizer__weight_decay': 0.1}","<bound method Pipeline.get_params of Pipeline(steps=[('scaler',
+                 ColumnTransformer(remainder='passthrough',
+                                   transformers=[('customstandardscaler',
+                                                  CustomStandardScaler(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2af10910>),
+                                                 ('customstandardscaler2',
+                                                  CustomStandardScaler2(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fc9b8e4e650>)])),
+                ('est...
+      (10): Dropout(p=0.28591724914948907, inplace=False)
+      (11): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (12): Linear(in_features=128, out_features=128, bias=True)
+      (13): ReLU()
+      (14): Dropout(p=0.28591724914948907, inplace=False)
+      (15): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (16): Linear(in_features=128, out_features=1, bias=True)
+    )
+  ),
+))])>",0.7993487835279566,0.8050924363445457
+"{'estimator__batch_size': 64, 'estimator__module__dropout': 0.4685498889685238, 'estimator__module__n_layers': 4, 'estimator__module__num_nodes': 128, 'estimator__optimizer__weight_decay': 0}","<bound method Pipeline.get_params of Pipeline(steps=[('scaler',
+                 ColumnTransformer(remainder='passthrough',
+                                   transformers=[('customstandardscaler',
+                                                  CustomStandardScaler(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb5d20>),
+                                                 ('customstandardscaler2',
+                                                  CustomStandardScaler2(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb6230>)])),
+                ('est...
+      (10): Dropout(p=0.4685498889685238, inplace=False)
+      (11): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (12): Linear(in_features=128, out_features=128, bias=True)
+      (13): ReLU()
+      (14): Dropout(p=0.4685498889685238, inplace=False)
+      (15): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (16): Linear(in_features=128, out_features=1, bias=True)
+    )
+  ),
+))])>",0.7962426523152583,0.800051988079876
+"{'estimator__batch_size': 64, 'estimator__module__dropout': 0.4685498889685238, 'estimator__module__n_layers': 4, 'estimator__module__num_nodes': 128, 'estimator__optimizer__weight_decay': 0}","<bound method Pipeline.get_params of Pipeline(steps=[('scaler',
+                 ColumnTransformer(remainder='passthrough',
+                                   transformers=[('customstandardscaler',
+                                                  CustomStandardScaler(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb7820>),
+                                                 ('customstandardscaler2',
+                                                  CustomStandardScaler2(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb44f0>)])),
+                ('est...
+      (10): Dropout(p=0.4685498889685238, inplace=False)
+      (11): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (12): Linear(in_features=128, out_features=128, bias=True)
+      (13): ReLU()
+      (14): Dropout(p=0.4685498889685238, inplace=False)
+      (15): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (16): Linear(in_features=128, out_features=1, bias=True)
+    )
+  ),
+))])>",0.7997031709465982,0.7914453561378124
+"{'estimator__batch_size': 64, 'estimator__module__dropout': 0.4685498889685238, 'estimator__module__n_layers': 4, 'estimator__module__num_nodes': 128, 'estimator__optimizer__weight_decay': 0}","<bound method Pipeline.get_params of Pipeline(steps=[('scaler',
+                 ColumnTransformer(remainder='passthrough',
+                                   transformers=[('customstandardscaler',
+                                                  CustomStandardScaler(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aef1ea0>),
+                                                 ('customstandardscaler2',
+                                                  CustomStandardScaler2(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aef2560>)])),
+                ('est...
+      (10): Dropout(p=0.4685498889685238, inplace=False)
+      (11): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (12): Linear(in_features=128, out_features=128, bias=True)
+      (13): ReLU()
+      (14): Dropout(p=0.4685498889685238, inplace=False)
+      (15): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (16): Linear(in_features=128, out_features=1, bias=True)
+    )
+  ),
+))])>",0.8036117415659427,0.7756031525476064
+"{'estimator__batch_size': 64, 'estimator__module__dropout': 0.4685498889685238, 'estimator__module__n_layers': 4, 'estimator__module__num_nodes': 128, 'estimator__optimizer__weight_decay': 0}","<bound method Pipeline.get_params of Pipeline(steps=[('scaler',
+                 ColumnTransformer(remainder='passthrough',
+                                   transformers=[('customstandardscaler',
+                                                  CustomStandardScaler(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb4ac0>),
+                                                 ('customstandardscaler2',
+                                                  CustomStandardScaler2(),
+                                                  <sklearn.compose._column_transformer.make_column_selector object at 0x7fca2aeb76a0>)])),
+                ('est...
+      (10): Dropout(p=0.4685498889685238, inplace=False)
+      (11): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (12): Linear(in_features=128, out_features=128, bias=True)
+      (13): ReLU()
+      (14): Dropout(p=0.4685498889685238, inplace=False)
+      (15): BatchNorm1d(128, eps=1e-05, momentum=0.1, affine=True, track_running_stats=True)
+      (16): Linear(in_features=128, out_features=1, bias=True)
+    )
+  ),
+))])>",0.7961049329545766,0.7990262643039642

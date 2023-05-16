@@ -9,11 +9,12 @@ from sklearn.utils.extmath import safe_sparse_dot
 from typeguard import typechecked
 
 from math import exp, sqrt, pi, erf, pow
-from numba import jit
+
 
 PDF_PREFACTOR: float = 0.3989424488876037
 SQRT_TWO: float = 1.4142135623730951
 SQRT_EPS: float = 1.4901161193847656e-08
+EPS: float = 2.220446049250313e-16
 CDF_ZERO: float = 0.5
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -21,21 +22,33 @@ def aft_likelihood(
     y: np.array,
     linear_predictor: np.array,
     sample_weight: np.array = 1.0,
+    bandwidth: np.array = None
 ) -> np.array:
+
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
-    bandwidth = 1.30 * pow(n_samples, -0.2)
+    if bandwidth==None:
+        bandwidth = 1.30 * pow(n_samples, -0.2)
+    #print('bandwidth', bandwidth)
     linear_predictor: np.array = linear_predictor * sample_weight
     R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
     event_mask: np.array = event.astype(np.bool_)
+
     _: np.array
     kernel_matrix: np.array
     integrated_kernel_matrix: np.array
 
+    # mistake here, remove
+    #(_, kernel_matrix, integrated_kernel_matrix,) = difference_kernels(
+    #    a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
+    #)
+
     (_, kernel_matrix, integrated_kernel_matrix,) = difference_kernels(
-        a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
+        a=R_linear_predictor, b=R_linear_predictor[event_mask], bandwidth=bandwidth
     )
+
+    #print('integrated_kernel_matrix',integrated_kernel_matrix)
     kernel_matrix = kernel_matrix[event_mask, :]
 
     inverse_sample_size: float = 1 / n_samples
@@ -117,6 +130,7 @@ def aft_objective(
     time, event = transform_back(y)
     linear_predictor: np.array = np.exp(sample_weight * linear_predictor)
     linear_predictor = np.log(time * linear_predictor)
+    #R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     n_samples: int = time.shape[0]
     bandwidth = 1.30 * pow(n_samples, -0.2)
     gradient: np.array = np.empty(n_samples)
@@ -140,7 +154,14 @@ def aft_objective(
     ) = difference_kernels(
         a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
     )
-
+    
+    # (
+    #     difference_outer_product,
+    #     kernel_matrix,
+    #     integrated_kernel_matrix,
+    # ) = difference_kernels(
+    #     a=R_linear_predictor, b=R_linear_predictor[event_mask], bandwidth=bandwidth
+    # )
     squared_kernel_matrix: np.array = np.square(kernel_matrix)
     squared_difference_outer_product: np.array = np.square(
         difference_outer_product
@@ -315,6 +336,36 @@ def aft_objective(
     grad = np.negative(gradient)
     hess = modify_hessian(np.negative(hessian))
     return grad, hess
+
+
+@jit(nopython=True, cache=True, fastmath=True)
+def baseline_hazard_estimator_aft(
+    time,
+    train_time,
+    train_event,
+    train_eta,
+):
+    n_samples: int = train_time.shape[0]
+    bandwidth = 1.30 * math.pow(n_samples, -0.2)
+    inverse_bandwidth: float = 1 / bandwidth
+    inverse_sample_size: float = 1 / n_samples
+    log_time: float = log(time + EPS)
+    inverse_bandwidth_sample_size_time: float = (
+        inverse_sample_size * (1 / (time + EPS)) * inverse_bandwidth
+    )
+
+    R_lp: np.array = np.log(train_time * np.exp(train_eta))
+    difference_lp_log_time: np.array = (R_lp - log_time) / bandwidth
+    numerator: float = 0.0
+    denominator: float = 0.0
+    for _ in range(n_samples):
+        difference_div: float = difference_lp_log_time[_]
+        denominator += gaussian_integrated_kernel(difference_div)
+        if train_event[_]:
+            numerator += gaussian_kernel(difference_div)
+    numerator = inverse_bandwidth_sample_size_time * numerator
+    denominator = inverse_sample_size * denominator
+    return numerator / denominator
 
 
 class AftPredictor:
