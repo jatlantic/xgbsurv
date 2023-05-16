@@ -5,6 +5,7 @@ from numba import jit
 #from scipy.special import logsumexp
 import numpy.typing as npt
 from xgbsurv.models.utils import transform, transform_back
+import pandas as pd
 
 
 # model functions
@@ -223,7 +224,7 @@ def breslow_estimator(log_hazard, time, event):
 # Looped version of breslow estimator
 
 @jit(nopython=True, cache=True, fastmath=True)
-def breslow_estimator_breslow(    
+def breslow_estimator_loop(    
     predictor: np.array,
     time: np.array,
     event: np.array
@@ -269,10 +270,63 @@ def breslow_estimator_breslow(
     )
 
 
+
+def get_cumulative_hazard_function(X_train: np.array, 
+        X_test: np.array, y_train: np.array, y_test: np.array,
+        predictor_train: np.array, predictor_test: np.array
+    ) -> pd.DataFrame:
+    # inputs necessary: train_time, train_event, train_preds, 
+    time_train, event_train = transform_back(y_train)
+    time_test, event_test = transform_back(y_test)
+    #print(time_test)
+    if np.min(time_test) < 0:
+        raise ValueError(
+            "Times for survival and cumulative hazard prediction must be greater than or equal to zero."
+            + f"Minimum time found was {np.min(time_test)}."
+            + "Please remove any times strictly less than zero."
+        )
+    cumulative_baseline_hazards_times: np.array
+    cumulative_baseline_hazards: np.array
+    (
+        cumulative_baseline_hazards_times,
+        cumulative_baseline_hazards,
+    ) = breslow_estimator_loop(
+        time=time_train, event=event_train, predictor=predictor_train
+    )
+    cumulative_baseline_hazards = np.concatenate(
+        [np.array([0.0]), cumulative_baseline_hazards]
+    )
+    cumulative_baseline_hazards_times: np.array = np.concatenate(
+        [np.array([0.0]), cumulative_baseline_hazards_times]
+    )
+    cumulative_baseline_hazards: np.array = np.tile(
+        A=cumulative_baseline_hazards[
+            np.digitize(
+                x=time_test, bins=cumulative_baseline_hazards_times, right=False
+            )
+            - 1
+        ],
+        reps=X_test.shape[0],
+    ).reshape((X_test.shape[0], time_test.shape[0]))
+    log_hazards: np.array = (
+        np.tile(
+            A= predictor_test, #self.predict(X),
+            reps=time_test.shape[0],
+        )
+        .reshape((time_test.shape[0], X_test.shape[0]))
+        .T
+    )
+    df_cumulative_hazard: pd.DataFrame = pd.DataFrame(
+        cumulative_baseline_hazards * np.exp(log_hazards),
+        columns=time_test,
+    )
+
+    return df_cumulative_hazard.T.sort_index()
+
 # Breslow Predictor
 
 
-class BreslowPredictor(): # SET TIES OPTION
+class BreslowPredictor():
     """Prediction functions particular to the Cox PH model"""
     
     def __init__(self) -> None:
@@ -280,13 +334,56 @@ class BreslowPredictor(): # SET TIES OPTION
         self.cum_hazard_baseline = None
         self.baseline_survival = None
         
-    
-    def fit(self, partial_hazard, y):
-        # CALL BRESLOW FUNCTIOIN FROM UTILS, no take the one below
-        time, event = transform_back(y)
-        self.uniq_times, self.cum_hazard_baseline, self.baseline_survival = breslow_estimator(partial_hazard, time, event)
-        print(self.uniq_times.shape, self.cum_hazard_baseline.shape)
-        return self 
+    def get_cumulative_hazard_function(X_train: np.array, 
+            X_test: np.array, y_train: np.array, y_test: np.array,
+            predictor_train: np.array, predictor_test: np.array
+        #self, X: np.array, time: np.array
+        ) -> pd.DataFrame:
+        # inputs necessary: train_time, train_event, train_preds, 
+        time_train, event_train = transform_back(y_train)
+        time_test, event_test = transform_back(y_test)
+        if np.min(time_test) < 0:
+            raise ValueError(
+                "Times for survival and cumulative hazard prediction must be greater than or equal to zero."
+                + f"Minimum time found was {np.min(time_test)}."
+                + "Please remove any times strictly less than zero."
+            )
+        cumulative_baseline_hazards_times: np.array
+        cumulative_baseline_hazards: np.array
+        (
+            cumulative_baseline_hazards_times,
+            cumulative_baseline_hazards,
+        ) = breslow_estimator_loop(
+            time=time_train, event=event_train, predictor=predictor_train
+        )
+        cumulative_baseline_hazards = np.concatenate(
+            [np.array([0.0]), cumulative_baseline_hazards]
+        )
+        cumulative_baseline_hazards_times: np.array = np.concatenate(
+            [np.array([0.0]), cumulative_baseline_hazards_times]
+        )
+        cumulative_baseline_hazards: np.array = np.tile(
+            A=cumulative_baseline_hazards[
+                np.digitize(
+                    x=time_test, bins=cumulative_baseline_hazards_times, right=False
+                )
+                - 1
+            ],
+            reps=X_test.shape[0],
+        ).reshape((X_test.shape[0], time_test.shape[0]))
+        log_hazards: np.array = (
+            np.tile(
+                A= predictor_test, #self.predict(X),
+                reps=time_test.shape[0],
+            )
+            .reshape((time_test.shape[0], X_test.shape[0]))
+            .T
+        )
+        cumulative_hazard_function: pd.DataFrame = pd.DataFrame(
+            cumulative_baseline_hazards * np.exp(log_hazards),
+            columns=time_test,
+        )
+        return cumulative_hazard_function
 
     def get_cumulative_hazard_function(self):
         return self.uniq_times, self.cum_hazard_baseline

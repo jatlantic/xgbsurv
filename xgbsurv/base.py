@@ -1,5 +1,5 @@
 from xgbsurv.models.breslow_final import breslow_likelihood, breslow_objective, \
-BreslowPredictor
+BreslowPredictor, get_cumulative_hazard_function
 from xgbsurv.models.efron_final import efron_likelihood, efron_objective, \
 EfronPredictor
 from xgbsurv.models.cind_final import cind_loss, cind_objective, \
@@ -60,6 +60,7 @@ class XGBSurv(XGBRegressor):
     def fit(self, X, y, *, eval_test_size=None, **kwargs):
 
         X, y = self._sort_X_y(X,y)
+        # TODO: remove for efficiency
         self.y = y
         self.X = X
         # deephit multioutput
@@ -91,58 +92,96 @@ class XGBSurv(XGBRegressor):
         else:
             return super(XGBSurv, self).fit(X, y, **kwargs)
         
-    def predict_cumulative_hazard_function(self, X, dataframe=False):
+    # TODO: DataFrame Option
+    def predict_cumulative_hazard_function(
+        self, 
+        X_train: np.array,
+        X_test: np.array,
+        y_train: np.array,
+        y_test: np.array, 
+        #dataframe=False
+        ) -> pd.DataFrame:
         if self.model_type:
             # TODO: Set output margin
-            self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
-            self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
-            self.predictor = pred_dict[str(self.model_type)]
-            # fit only with training hazards?
-            est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
-            self.uniq_times, self.cum_hazard_baseline = est.get_cumulative_hazard_function()
-            # sample hazards have to repeated to get prediction for each individual
-            self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
-            times = np.tile(self.uniq_times,(self.pred_cum_hazards.shape[0],1))
-            if dataframe:
-                d = dict()
-                d['time'] = self.uniq_times
-                for ind, val in enumerate(times):
-                    d['patient_'+str(ind)] = self.pred_cum_hazards[ind]
-                df = pd.DataFrame(d)
-                return df
-            else:
-                return times, self.pred_cum_hazards
+
+            train_pred_hazards = super(XGBSurv, self).predict(X_train, output_margin=True)
+            test_pred_hazards = super(XGBSurv, self).predict(X_test, output_margin=True)
+            return get_cumulative_hazard_function(X_train, 
+            X_test, y_train, y_test,
+            train_pred_hazards, test_pred_hazards
+            )
         else:
             raise NotImplementedError("Cumulative hazard not applicable to the model you provided.")
     
-    def predict_survival_function(self, X, test_times, dataframe=False):
+        
+    # TODO: add model condition
+    def predict_survival_function(
+            self, 
+            X_train: np.array, 
+            X_test: np.array,
+            y_train: np.array, 
+            y_test: np.array):
+        
+        X_train, y_train = self._sort_X_y(X_train, y_train)
+        X_test, y_test = self._sort_X_y(X_test, y_test)
+        df_cumulative_hazard = self.predict_cumulative_hazard_function(X_train, 
+            X_test, y_train, y_test)
+        return np.exp(-df_cumulative_hazard)
 
-        if self.cum_hazard_baseline is None:
-            time_train, event_train = transform_back(self.y)
-            self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
-            self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
-            self.predictor = pred_dict[str(self.model_type)]
-            # fit only with training hazards?
-            est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
-            self.uniq_times, self.cum_hazard_baseline_train = est.get_cumulative_hazard_function()
-            # take sample of the test data
-            cum_hazard_baseline_test = np.interp(np.unique(test_times), np.unique(time_train), self.cum_hazard_baseline_train)
 
-            # sample hazards have to repeated to get prediction for each individual
-            #self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
-            self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), cum_hazard_baseline_test)
+
+    # def predict_cumulative_hazard_function(self, X, dataframe=False):
+    #     if self.model_type:
+    #         # TODO: Set output margin
+    #         self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
+    #         self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
+    #         self.predictor = pred_dict[str(self.model_type)]
+    #         # fit only with training hazards?
+    #         est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
+    #         self.uniq_times, self.cum_hazard_baseline = est.get_cumulative_hazard_function()
+    #         # sample hazards have to repeated to get prediction for each individual
+    #         self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
+    #         times = np.tile(self.uniq_times,(self.pred_cum_hazards.shape[0],1))
+    #         if dataframe:
+    #             d = dict()
+    #             d['time'] = self.uniq_times
+    #             for ind, val in enumerate(times):
+    #                 d['patient_'+str(ind)] = self.pred_cum_hazards[ind]
+    #             df = pd.DataFrame(d)
+    #             return df
+    #         else:
+    #             return times, self.pred_cum_hazards
+    #     else:
+    #         raise NotImplementedError("Cumulative hazard not applicable to the model you provided.")
+    
+    # def predict_survival_function(self, X, test_times, dataframe=False):
+
+    #     if self.cum_hazard_baseline is None:
+    #         time_train, event_train = transform_back(self.y)
+    #         self.train_pred_hazards = super(XGBSurv, self).predict(self.X, output_margin=True)
+    #         self.pred_hazards = super(XGBSurv, self).predict(X, output_margin=True)
+    #         self.predictor = pred_dict[str(self.model_type)]
+    #         # fit only with training hazards?
+    #         est = self.predictor().fit(self.train_pred_hazards, self.y) # y from training set, cache from fit(), call breslow in fit, efron as well
+    #         self.uniq_times, self.cum_hazard_baseline_train = est.get_cumulative_hazard_function()
+    #         # take sample of the test data
+    #         cum_hazard_baseline_test = np.interp(np.unique(test_times), np.unique(time_train), self.cum_hazard_baseline_train)
+
+    #         # sample hazards have to repeated to get prediction for each individual
+    #         #self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), self.cum_hazard_baseline)
+    #         self.pred_cum_hazards = np.outer(np.exp(self.pred_hazards), cum_hazard_baseline_test)
            
-        self.pred_survival = np.exp(-self.pred_cum_hazards)
-        times = np.tile(self.uniq_times,(self.pred_survival.shape[0],1))
-        if dataframe:
-            d = dict()
-            d['time'] = self.uniq_times
-            for ind, val in enumerate(times):
-                d['patient_'+str(ind)] = self.pred_survival[ind]
-            df = pd.DataFrame(d)
-            return df
-        else:
-            return self.uniq_times, self.pred_survival
+    #     self.pred_survival = np.exp(-self.pred_cum_hazards)
+    #     times = np.tile(self.uniq_times,(self.pred_survival.shape[0],1))
+    #     if dataframe:
+    #         d = dict()
+    #         d['time'] = self.uniq_times
+    #         for ind, val in enumerate(times):
+    #             d['patient_'+str(ind)] = self.pred_survival[ind]
+    #         df = pd.DataFrame(d)
+    #         return df
+    #     else:
+    #         return self.uniq_times, self.pred_survival
 
         
     def get_loss_functions(self):
