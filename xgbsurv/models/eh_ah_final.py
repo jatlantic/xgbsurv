@@ -5,6 +5,8 @@ from numba import jit
 from scipy.stats import norm
 from sklearn.utils.extmath import safe_sparse_dot
 from typeguard import typechecked
+import pandas as pd
+from scipy.integrate import quad
 
 from math import exp, sqrt, pi, erf
 from numba import jit
@@ -431,6 +433,34 @@ def baseline_hazard_estimator_ah(
     denominator = inverse_sample_size * denominator
 
     return numerator / denominator
+
+def ah_predict_cumulative_hazard_function(self, X, time):
+    theta: np.array = np.exp(self.predict(X))
+    n_samples: int = X.shape[0]
+
+    zero_flag: bool = False
+    if 0 not in time:
+        zero_flag = True
+        time = np.concatenate([np.array([0]), time])
+        cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+    else:
+        cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+
+    def hazard_function_integrate(s):
+        return self.predict_baseline_hazard_function(s)
+
+    for _ in range(n_samples):
+        for ix, q in enumerate(time):
+            if q == 0:
+                cumulative_hazard[_, ix] = 0.0
+            else:
+                cumulative_hazard[_, ix] = (
+                    quad(hazard_function_integrate, 0, q)[0] * theta[_]
+                )
+    if zero_flag:
+        cumulative_hazard = cumulative_hazard[:, 1:]
+        time = time[1:]
+    return pd.DataFrame(cumulative_hazard, columns=time)
 
 
 class AhPredictor:

@@ -4,6 +4,7 @@ import numpy as np
 from numba import jit
 import numpy.typing as npt
 from xgbsurv.models.utils import transform, transform_back
+import pandas as pd
 
 
 @jit(nopython=True)
@@ -239,6 +240,132 @@ def efron_objective(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[float
             local_risk_set_hessian_death,
         )
     return grad, hess
+
+
+@jit(nopython=True, cache=True, fastmath=True)
+def efron_estimator(
+    predictor: np.array,
+    time: np.array,
+    event: np.array,
+):
+    exp_predictor: np.array = np.exp(predictor)
+    local_risk_set: float = np.sum(exp_predictor)
+    event_mask: np.array = event.astype(np.bool_)
+    n_unique_events: int = np.unique(time[event_mask]).shape[0]
+    cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
+    n_events_counted: int = 0
+    local_death_set: int = 0
+    accumulated_risk_set: float = 0
+    previous_time: float = time[0]
+    local_death_set_risk: float = 0
+
+    for _ in range(len(time)):
+        sample_time: float = time[_]
+        sample_event: int = event[_]
+        sample_exp_predictor: float = exp_predictor[_]
+
+        if sample_time > previous_time and local_death_set:
+            for ell in range(local_death_set):
+                cumulative_baseline_hazards[n_events_counted] += 1 / (
+                    local_risk_set
+                    - (ell / local_death_set) * local_death_set_risk
+                )
+
+            local_risk_set -= accumulated_risk_set
+            accumulated_risk_set = 0
+            local_death_set_risk = 0
+            local_death_set = 0
+            n_events_counted += 1
+
+        if sample_event:
+            local_death_set += 1
+            local_death_set_risk += sample_exp_predictor
+        accumulated_risk_set += sample_exp_predictor
+        previous_time = sample_time
+
+    for ell in range(local_death_set):
+        cumulative_baseline_hazards[n_events_counted] += 1 / (
+            local_risk_set - (ell / local_death_set) * local_death_set_risk
+        )
+
+    return (
+        np.unique(time[event_mask]),
+        np.cumsum(cumulative_baseline_hazards),
+    )
+
+
+def get_cumulative_hazard_function_efron(X_train: np.array, 
+        X_test: np.array, y_train: np.array, y_test: np.array,
+        predictor_train: np.array, predictor_test: np.array
+    ) -> pd.DataFrame:
+    # inputs necessary: train_time, train_event, train_preds, 
+    time_train, event_train = transform_back(y_train)
+    time_test, event_test = transform_back(y_test)
+    #print(time_test)
+    if np.min(time_test) < 0:
+        raise ValueError(
+            "Times for survival and cumulative hazard prediction must be greater than or equal to zero."
+            + f"Minimum time found was {np.min(time_test)}."
+            + "Please remove any times strictly less than zero."
+        )
+    cumulative_baseline_hazards_times: np.array
+    cumulative_baseline_hazards: np.array
+    (
+        cumulative_baseline_hazards_times,
+        cumulative_baseline_hazards,
+    ) = efron_estimator(
+        time=time_train, event=event_train, predictor=predictor_train
+    )
+    cumulative_baseline_hazards = np.concatenate(
+        [np.array([0.0]), cumulative_baseline_hazards]
+    )
+    cumulative_baseline_hazards_times: np.array = np.concatenate(
+        [np.array([0.0]), cumulative_baseline_hazards_times]
+    )
+    cumulative_baseline_hazards: np.array = np.tile(
+        A=cumulative_baseline_hazards[
+            np.digitize(
+                x=time_test, bins=cumulative_baseline_hazards_times, right=False
+            )
+            - 1
+        ],
+        reps=X_test.shape[0],
+    ).reshape((X_test.shape[0], time_test.shape[0]))
+    log_hazards: np.array = (
+        np.tile(
+            A= predictor_test, #self.predict(X),
+            reps=time_test.shape[0],
+        )
+        .reshape((time_test.shape[0], X_test.shape[0]))
+        .T
+    )
+    df_cumulative_hazard: pd.DataFrame = pd.DataFrame(
+        cumulative_baseline_hazards * np.exp(log_hazards),
+        columns=time_test,
+    )
+
+    return df_cumulative_hazard.T.sort_index(axis=1)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #@jit(nopython=True) np.insert and numba not working
 def efron_baseline_estimator(log_partial_hazard, time, event):

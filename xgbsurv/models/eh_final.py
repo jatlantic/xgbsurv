@@ -6,6 +6,8 @@ import numpy.typing as npt
 import math
 from math import exp, sqrt, pi, erf, pow
 from xgbsurv.models.utils import transform, transform_back
+import pandas as pd
+from scipy.integrate import quad
 
 PDF_PREFACTOR: float = 0.3989424488876037
 SQRT_TWO: float = 1.4142135623730951
@@ -620,6 +622,38 @@ def baseline_hazard_estimator_eh(
     denominator = inverse_sample_size * denominator
 
     return numerator / denominator
+
+def predict_cumulative_hazard_function(self, X, time):
+    # Assume theta \in R^{nx2}, where theta[:, 0] = h1, and
+    # theta[:, 1] = h2.
+    theta: np.array = np.exp(self.predict(X))
+    n_samples: int = X.shape[0]
+
+    zero_flag: bool = False
+    if 0 not in time:
+        zero_flag = True
+        time = np.concatenate([np.array([0]), time])
+        cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+    else:
+        cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+
+    def hazard_function_integrate(s):
+        return self.predict_baseline_hazard_function(s)
+
+    for _ in range(n_samples):
+        for ix, q in enumerate(time):
+            if q == 0:
+                cumulative_hazard[_, ix] = 0.0
+            else:
+                cumulative_hazard[_, ix] = (
+                    quad(hazard_function_integrate, 0, q * theta[_, 0])[0]
+                    * theta[_, 1]
+                    / theta[_, 0]
+                )
+    if zero_flag:
+        cumulative_hazard = cumulative_hazard[:, 1:]
+        time = time[1:]
+    return pd.DataFrame(cumulative_hazard, columns=time)
 
 
 

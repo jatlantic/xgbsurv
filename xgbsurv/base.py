@@ -1,13 +1,13 @@
 from xgbsurv.models.breslow_final import breslow_likelihood, breslow_objective, \
-BreslowPredictor, get_cumulative_hazard_function
+BreslowPredictor, get_cumulative_hazard_function_breslow
 from xgbsurv.models.efron_final import efron_likelihood, efron_objective, \
-EfronPredictor
+EfronPredictor, get_cumulative_hazard_function_efron
 from xgbsurv.models.cind_final import cind_loss, cind_objective, \
 CindPredictor
 from xgbsurv.models.deephit_pycox_final import deephit_loss1_pycox, deephit_pycox_objective, \
 DeephitPredictor
 from xgbsurv.models.eh_aft_final import aft_likelihood, aft_objective, \
-AftPredictor
+AftPredictor, aft_get_cumulative_hazard_function
 from xgbsurv.models.eh_ah_final import ah_likelihood, ah_objective, \
 AhPredictor
 from xgbsurv.models.eh_final import eh_likelihood, eh_objective
@@ -30,7 +30,10 @@ pred_dict = {'breslow_objective': BreslowPredictor, 'efron_objective': EfronPred
               'cind_objective': CindPredictor, 'deephit_objective': DeephitPredictor, \
             'aft_objective':AftPredictor, 'ah_objective':AhPredictor}
 
-
+pred_dict =  {'breslow_objective': get_cumulative_hazard_function_breslow, \
+              'efron_objective': get_cumulative_hazard_function_efron, \
+              'aft_objective': aft_get_cumulative_hazard_function
+                }
 
 class XGBSurv(XGBRegressor):
 
@@ -102,11 +105,11 @@ class XGBSurv(XGBRegressor):
         #dataframe=False
         ) -> pd.DataFrame:
         if self.model_type:
-            # TODO: Set output margin
+            # TODO: change column names from range
 
             train_pred_hazards = super(XGBSurv, self).predict(X_train, output_margin=True)
             test_pred_hazards = super(XGBSurv, self).predict(X_test, output_margin=True)
-            return get_cumulative_hazard_function(X_train, 
+            return pred_dict[str(self.model_type)](X_train, 
             X_test, y_train, y_test,
             train_pred_hazards, test_pred_hazards
             )

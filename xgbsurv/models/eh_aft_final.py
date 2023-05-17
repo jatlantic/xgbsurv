@@ -2,13 +2,17 @@ from typing import Tuple, Callable
 from xgbsurv.models.utils import transform, transform_back
 import numpy as np
 from numba import jit
+import pandas as pd
+from scipy.integrate import quad
+from functools import partial
+from numba import cfunc
 
 # verify if below are really required?
 from scipy.stats import norm
 from sklearn.utils.extmath import safe_sparse_dot
 from typeguard import typechecked
 
-from math import exp, sqrt, pi, erf, pow
+from math import exp, sqrt, pi, erf, pow, log
 
 
 PDF_PREFACTOR: float = 0.3989424488876037
@@ -335,18 +339,18 @@ def aft_objective(
             hessian[_] = hessian_five + hessian_six
     grad = np.negative(gradient)
     hess = modify_hessian(np.negative(hessian))
-    return grad, hess
+    return grad, np.ones(grad.shape[0]) #hess
 
 
 @jit(nopython=True, cache=True, fastmath=True)
-def baseline_hazard_estimator_aft(
-    time,
-    train_time,
-    train_event,
-    train_eta,
+def aft_baseline_hazard_estimator(
+    time, # unique test time(?), time to integrate over
+    time_train,
+    event_train,
+    predictor_train,
 ):
-    n_samples: int = train_time.shape[0]
-    bandwidth = 1.30 * math.pow(n_samples, -0.2)
+    n_samples: int = time_train.shape[0]
+    bandwidth = 1.30 * pow(n_samples, -0.2)
     inverse_bandwidth: float = 1 / bandwidth
     inverse_sample_size: float = 1 / n_samples
     log_time: float = log(time + EPS)
@@ -354,18 +358,63 @@ def baseline_hazard_estimator_aft(
         inverse_sample_size * (1 / (time + EPS)) * inverse_bandwidth
     )
 
-    R_lp: np.array = np.log(train_time * np.exp(train_eta))
+    R_lp: np.array = np.log(time_train * np.exp(predictor_train))
     difference_lp_log_time: np.array = (R_lp - log_time) / bandwidth
     numerator: float = 0.0
     denominator: float = 0.0
     for _ in range(n_samples):
         difference_div: float = difference_lp_log_time[_]
         denominator += gaussian_integrated_kernel(difference_div)
-        if train_event[_]:
+        if event_train[_]:
             numerator += gaussian_kernel(difference_div)
     numerator = inverse_bandwidth_sample_size_time * numerator
     denominator = inverse_sample_size * denominator
     return numerator / denominator
+
+#nb_integrand = cfunc("float64(float64, float64, float64, float64)")(aft_baseline_hazard_estimator)
+
+#@jit(nopython=True, cache=True, fastmath=True)
+def aft_get_cumulative_hazard_function(
+        X_train: np.array, 
+        X_test: np.array, 
+        y_train: np.array, 
+        y_test: np.array,
+        predictor_train: np.array, 
+        predictor_test: np.array):
+        
+    #predictor_test: np.array = np.exp(self.predict(X))
+    time_train, event_train = transform_back(y_train)
+    time_test, event_test = transform_back(y_test)
+    n_samples: int = X_test.shape[0]
+
+    zero_flag: bool = False
+    if 0 not in time_test:
+        zero_flag = True
+        time_test = np.concatenate([np.array([0]), time_test])
+        cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+    else:
+        cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+
+    #def hazard_function_integrate(s):
+    #    return 
+    #hazard_function_integrate = partial(aft_baseline_hazard_estimator, time_train=time_train, event_train=event_train, predictor_train=predictor_train)
+
+    for _ in range(n_samples):
+        for ix, q in enumerate(time_test):
+            #print(_)
+            if q == 0:
+                #print('q0')
+                cumulative_hazard[_, ix] = 0.0
+            else:
+                #print(cumulative_hazard)
+                cumulative_hazard[_, ix] = quad(
+                   aft_baseline_hazard_estimator, 0, q * predictor_test[_],
+                   args=(time_train, event_train, predictor_train)
+                )[0]
+    if zero_flag:
+        cumulative_hazard = cumulative_hazard[:, 1:]
+        time_test = time_test[1:]
+    return pd.DataFrame(cumulative_hazard, columns=time_test)
 
 
 class AftPredictor:

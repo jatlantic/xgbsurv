@@ -271,13 +271,15 @@ def breslow_estimator_loop(
 
 
 
-def get_cumulative_hazard_function(X_train: np.array, 
+def get_cumulative_hazard_function_breslow(X_train: np.array, 
         X_test: np.array, y_train: np.array, y_test: np.array,
         predictor_train: np.array, predictor_test: np.array
     ) -> pd.DataFrame:
-    # inputs necessary: train_time, train_event, train_preds, 
+    # inputs necessary: train_time, train_event, train_preds,
+    # TODO: slim down inputs of function to what is needed
     time_train, event_train = transform_back(y_train)
     time_test, event_test = transform_back(y_test)
+    time_test = np.unique(time_test)
     #print(time_test)
     if np.min(time_test) < 0:
         raise ValueError(
@@ -321,7 +323,7 @@ def get_cumulative_hazard_function(X_train: np.array,
         columns=time_test,
     )
 
-    return df_cumulative_hazard.T.sort_index()
+    return df_cumulative_hazard.T.sort_index(axis=1)
 
 # Breslow Predictor
 
