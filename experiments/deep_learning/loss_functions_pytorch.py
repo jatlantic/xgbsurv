@@ -34,7 +34,7 @@ def transform_torch(time: torch.Tensor, event: torch.Tensor) -> torch.Tensor:
         raise RuntimeError('Data contains zero time value!')
         # alternative: time[time==0] = np.finfo(float).eps
     y = event_mod*time
-    return y.float()
+    return y.to(torch.float32)
 
 
 def transform_back_torch(y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
@@ -53,7 +53,7 @@ def transform_back_torch(y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     time = torch.abs(y)
     event = (torch.abs(y) == y)
     event = event # for numba
-    return time, event
+    return time.to(torch.float32), event.to(torch.float32)
 
 
 # Breslow  loss
@@ -130,7 +130,7 @@ class BreslowLoss(_Loss):
 
     def forward(self, prediction, input):
         loss = breslow_likelihood_torch(input, prediction)
-        return loss
+        return loss.to(torch.float32)
     
 
 # Efron  loss
