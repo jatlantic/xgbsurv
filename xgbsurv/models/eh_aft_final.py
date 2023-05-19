@@ -3,7 +3,7 @@ from xgbsurv.models.utils import transform, transform_back
 import numpy as np
 from numba import jit
 import pandas as pd
-from scipy.integrate import quad
+from scipy.integrate import quad, cumtrapz
 from functools import partial
 from numba import cfunc
 
@@ -342,7 +342,7 @@ def aft_objective(
     return grad, np.ones(grad.shape[0]) #hess
 
 
-@jit(nopython=True, cache=True, fastmath=True)
+#@jit(nopython=True, cache=True, fastmath=True)
 def aft_baseline_hazard_estimator(
     time, # unique test time(?), time to integrate over
     time_train,
@@ -373,7 +373,62 @@ def aft_baseline_hazard_estimator(
 
 #nb_integrand = cfunc("float64(float64, float64, float64, float64)")(aft_baseline_hazard_estimator)
 
+
 #@jit(nopython=True, cache=True, fastmath=True)
+# def aft_get_cumulative_hazard_function(
+#         X_train: np.array, 
+#         X_test: np.array, 
+#         y_train: np.array, 
+#         y_test: np.array,
+#         predictor_train: np.array, 
+#         predictor_test: np.array):
+        
+#     #predictor_test: np.array = np.exp(self.predict(X))
+#     time_train, event_train = transform_back(y_train)
+#     time_test, event_test = transform_back(y_test)
+#     n_samples: int = X_test.shape[0]
+
+#     zero_flag: bool = False
+#     if 0 not in time_test:
+#         zero_flag = True
+#         time_test = np.concatenate([np.array([0]), time_test])
+#         cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+#     else:
+#         cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+
+#     #def hazard_function_integrate(s):
+#     #    return 
+#     theta = predictor_test
+#     hazard_function_integrate = partial(aft_baseline_hazard_estimator, time_train=time_train, event_train=event_train, predictor_train=predictor_train)
+
+#     for _ in range(n_samples):
+#         cumulative_hazard[_, 0] = 0.0
+#         cumulative_hazard[_, 1] = quad(
+#             hazard_function_integrate, 0, time_test[1] * theta[_]
+#         )[0]
+#         cumulative_hazard[_, 2:] = cumtrapz(
+#             y=hazard_function_integrate(time_test[1:] * theta[_]),
+#             x=time_test,
+#             initial=0,
+#         )[1:]
+
+#         # for ix, q in enumerate(time_test):
+#         #     #print(_)
+#         #     if q == 0:
+#         #         #print('q0')
+#         #         cumulative_hazard[_, ix] = 0.0
+#         #     else:
+#         #         #print(cumulative_hazard)
+#         #         cumulative_hazard[_, ix] = quad(
+#         #            aft_baseline_hazard_estimator, 0, q * predictor_test[_],
+#         #            args=(time_train, event_train, predictor_train)
+#         #         )[0]
+#     if zero_flag:
+#         cumulative_hazard = cumulative_hazard[:, 1:]
+#         time_test = time_test[1:]
+#     return pd.DataFrame(cumulative_hazard, columns=time_test)
+
+
 def aft_get_cumulative_hazard_function(
         X_train: np.array, 
         X_test: np.array, 
@@ -386,6 +441,7 @@ def aft_get_cumulative_hazard_function(
     time_train, event_train = transform_back(y_train)
     time_test, event_test = transform_back(y_test)
     n_samples: int = X_test.shape[0]
+    theta = predictor_test
 
     zero_flag: bool = False
     if 0 not in time_test:
@@ -397,24 +453,64 @@ def aft_get_cumulative_hazard_function(
 
     #def hazard_function_integrate(s):
     #    return 
-    #hazard_function_integrate = partial(aft_baseline_hazard_estimator, time_train=time_train, event_train=event_train, predictor_train=predictor_train)
+    hazard_function_integrate = partial(aft_baseline_hazard_estimator, time_train=time_train, event_train=event_train, predictor_train=predictor_train)
 
+    
     for _ in range(n_samples):
-        for ix, q in enumerate(time_test):
-            #print(_)
-            if q == 0:
-                #print('q0')
-                cumulative_hazard[_, ix] = 0.0
-            else:
-                #print(cumulative_hazard)
-                cumulative_hazard[_, ix] = quad(
-                   aft_baseline_hazard_estimator, 0, q * predictor_test[_],
-                   args=(time_train, event_train, predictor_train)
-                )[0]
+        cumulative_hazard[_, :] = cumtrapz(
+            y = aft_baseline_hazard_estimator(time_test * theta[_],time_train=time_train, event_train=event_train, predictor_train=predictor_train),
+            #y=hazard_function_integrate(time_test * theta[_]),
+            x=time_test,
+            initial=0,
+        )
     if zero_flag:
         cumulative_hazard = cumulative_hazard[:, 1:]
         time_test = time_test[1:]
     return pd.DataFrame(cumulative_hazard, columns=time_test)
+
+
+#@jit(nopython=True, cache=True, fastmath=True)
+# def aft_get_cumulative_hazard_function(
+#         X_train: np.array, 
+#         X_test: np.array, 
+#         y_train: np.array, 
+#         y_test: np.array,
+#         predictor_train: np.array, 
+#         predictor_test: np.array):
+        
+#     #predictor_test: np.array = np.exp(self.predict(X))
+#     time_train, event_train = transform_back(y_train)
+#     time_test, event_test = transform_back(y_test)
+#     n_samples: int = X_test.shape[0]
+
+#     zero_flag: bool = False
+#     if 0 not in time_test:
+#         zero_flag = True
+#         time_test = np.concatenate([np.array([0]), time_test])
+#         cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+#     else:
+#         cumulative_hazard: np.array = np.empty((n_samples, time_test.shape[0]))
+
+#     #def hazard_function_integrate(s):
+#     #    return 
+#     #hazard_function_integrate = partial(aft_baseline_hazard_estimator, time_train=time_train, event_train=event_train, predictor_train=predictor_train)
+
+#     for _ in range(n_samples):
+#         for ix, q in enumerate(time_test):
+#             #print(_)
+#             if q == 0:
+#                 #print('q0')
+#                 cumulative_hazard[_, ix] = 0.0
+#             else:
+#                 #print(cumulative_hazard)
+#                 cumulative_hazard[_, ix] = quad(
+#                    aft_baseline_hazard_estimator, 0, q * predictor_test[_],
+#                    args=(time_train, event_train, predictor_train)
+#                 )[0]
+#     if zero_flag:
+#         cumulative_hazard = cumulative_hazard[:, 1:]
+#         time_test = time_test[1:]
+#     return pd.DataFrame(cumulative_hazard, columns=time_test)
 
 
 class AftPredictor:
