@@ -134,6 +134,7 @@ def load_flchain(*, path="datasets/data/", return_X_y=False, as_frame=False):
         data = data.astype(np.float32)
         # change to categorical
         data['sex'] = data['sex'].astype('category')
+        data['mgus'] = data['mgus'].astype('category')
         target = target.astype(np.float32)
         #print(target.dtypes)
         #print(data.dtypes)
@@ -281,6 +282,7 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
         data = data.astype(np.float32)
         data['horm_treatment'] = data['horm_treatment'].astype('category')
         data['menopause'] = data['menopause'].astype('category')
+        data['grade'] = data['grade'].astype('category')
         target = target.astype(np.float32)
     
     if return_X_y:
@@ -297,7 +299,7 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
         )
     
 
-def load_tcga(*, cancer_type='BLCA' ,path="datasets/data/", return_X_y=True, as_frame=False):
+def load_tcga(*, cancer_type='BLCA' ,path="datasets/data/", return_X_y=False, as_frame=False):
     """add sklearn style documentation here
     """
     # TODO: preprocessing for orig data
@@ -318,7 +320,7 @@ def load_tcga(*, cancer_type='BLCA' ,path="datasets/data/", return_X_y=True, as_
         current_directory = os.getcwd()
         raise FileNotFoundError(str(path+data_file_name)+" is not a valid path. Start from "+str(current_directory)+"!")
 
-    feature_names = df.columns
+    
     #feature_names = df.columns.tolist()
     if check_if_time_sorted(df):
         pass
@@ -327,8 +329,12 @@ def load_tcga(*, cancer_type='BLCA' ,path="datasets/data/", return_X_y=True, as_
         raise ValueError("Dataset is not sorted by time ascending order.")
     
     # transform data
-    target = transform(df.time.to_numpy(),df.event.to_numpy())
-    data = df.iloc[:,:-2].to_numpy()
+    df = df[df['time']>0]
+    target = transform(df.time.to_numpy(), df.event.to_numpy())
+    target = target.astype(np.float32)
+    data = df.iloc[:, 2:].to_numpy()
+    data = data.astype(np.float32)
+    feature_names = df.iloc[:,2:].columns
 
     # change name potentially to cancer type
     if as_frame:

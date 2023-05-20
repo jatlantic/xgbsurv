@@ -69,6 +69,18 @@ def sort_X_y(X, y):
         y = y[order]
         X = X[order]
     return X, y
+
+
+def sort_X_y_pandas(X, y):
+    # naming convention as in sklearn
+    # add sorting here, maybe there is a faster way
+    y_abs = np.absolute(y.values)
+    if np.all(np.diff(y_abs) >= 0) is False:
+        #print('Values are being sorted!')
+        order = np.argsort(y_abs, kind="mergesort")
+        X = X.reindex(order)
+        y = y.reindex(order)
+    return X, y
     
 
 

@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from xgbsurv.models.utils import KaplanMeier
 import os
-from sklearn.preprocessing import OrdinalEncoder
+#from sklearn.preprocessing import OrdinalEncoder
 from sklearn.preprocessing import LabelEncoder
 
 # original data is taken from pycox
@@ -122,7 +122,8 @@ def support_preprocess(path="add your path here"):
 
 
 def tcga_preprocess(path="add your path here"):
-    cancer_names = ['BLCA',
+    cancer_names = [
+    'BLCA',
     'BRCA',
     'HNSC',
     'KIRC',
@@ -134,19 +135,23 @@ def tcga_preprocess(path="add your path here"):
     'STAD']
     print(os.getcwd())
     for name in cancer_names:
+        print(name)
         filename="original_data/TCGA/"+name+'.csv'
         df = pd.read_csv(path+filename)
         # drop patient id column
         df.drop(['patient_id'],axis=1, inplace=True)
         # remove zero time observations
         df = df[df.time!=0]
+        # median fill for NAs
+        for col in df.columns:
+            df[col] = df[col].fillna(df[col].median())
         # sort data
         df.sort_values(by='time', ascending=True, inplace=True)
         # save data
         df.to_csv(path+"data/"+name+"_adapted.csv", index=False)
     return
 
-tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
+#tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
 
 #/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/original_data/TCGA
 

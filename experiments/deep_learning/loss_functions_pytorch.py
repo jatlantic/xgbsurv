@@ -55,6 +55,26 @@ def transform_back_torch(y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     event = event # for numba
     return time.to(torch.float32), event.to(torch.float32)
 
+def transform_back_torch_deephit(y: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    """Transforms XGBoost digestable format variable y into time and event.
+
+    Parameters
+    ----------
+    y : npt.NDArray[float]
+        Array containing survival time and event where negative value is taken as censored event.
+
+    Returns
+    -------
+    tuple[npt.NDArray[float],npt.NDArray[int]]
+        Survival time and event.
+    """
+    #TODO: Build conditions and combine transform functions
+    y = y[:,0]
+    time = torch.abs(y)
+    event = (torch.abs(y) == y)
+    event = event # for numba
+    return time.to(torch.float32), event.to(torch.float32)
+
 
 # Breslow  loss
 
@@ -151,6 +171,15 @@ def efron_likelihood_torch(y: torch.Tensor, log_partial_hazard: torch.Tensor) ->
         Negative loglikelihood (loss) according to Efron.
     """
     # Assumes times have been sorted beforehand.
+    if isinstance(log_partial_hazard, np.ndarray):
+        log_partial_hazard = torch.from_numpy(log_partial_hazard)
+    if isinstance(log_partial_hazard, pd.Series):
+        log_partial_hazard = torch.tensor(log_partial_hazard.values)
+    if isinstance(y, np.ndarray):
+        y = torch.from_numpy(y)
+    if isinstance(y, pd.Series):
+        y = torch.tensor(y.values)
+
     time, event = transform_back_torch(y)
     partial_hazard = torch.exp(log_partial_hazard)
     samples = time.shape[0]
@@ -202,7 +231,61 @@ class EfronLoss(_Loss):
 
     def forward(self, prediction, input):
         loss = efron_likelihood_torch(input, prediction)
-        return loss
+        return loss.to(torch.float32)
+
+# Deephit Loss - use adapted pycox loss
+
+def deephit_likelihood_1_torch(y, phi):
+    time, events = transform_back_torch_deephit(y)
+    #time = time.reshape(time.shape[0],1)
+    #print('shape idx dur befoer', idx_durations.shape)
+    bins = torch.unique(time)
+    idx_durations = (torch.bucketize(time, bins))
+    idx_durations = idx_durations.view(-1, 1)
+    #print('shape idx dur after', idx_durations.shape)
+    # epsilon 
+    epsilon = np.finfo(float).eps
+    # pad phi as in pycox
+    pad = torch.zeros_like(phi[:,:1])
+    phi = torch.cat([phi, pad],axis=1)
+    print('phi shape', phi.shape)
+    # create durations index
+    bins = torch.unique(time)
+
+    if phi.shape[1] <= idx_durations.max():
+        raise ValueError(f"Network output `phi` is too small for `idx_durations`."+
+                         f" Need at least `phi.shape[1] = {idx_durations.max().item()+1}`,"+
+                         f" but got `phi.shape[1] = {phi.shape[1]}`")
+    if events.dtype is torch.bool:
+        events = events.float()
+    #events = events.view(-1)
+    #idx_durations = idx_durations.view(-1, 1)
+    #phi = utils.pad_col(phi)
+
+    gamma = phi.max(1)[0]
+    print('shapes', idx_durations.shape, phi.shape, gamma.shape, events.shape)
+    cumsum = phi.sub(gamma.view(-1, 1)).exp().cumsum(1)
+    sum_ = cumsum[:, -1]
+    part1 = phi.gather(1, idx_durations).view(-1).sub(gamma).mul(events)
+    part2 = - sum_.relu().add(epsilon).log()
+    part3 = sum_.sub(cumsum.gather(1, idx_durations).view(-1)).relu().add(epsilon).log().mul(1. - events)
+    # need relu() in part3 (and possibly part2) because cumsum on gpu has some bugs and we risk getting negative numbers.
+    loss = - part1.add(part2).add(part3)
+    return torch.sum(loss)
+
+
+class DeephitLoss(_Loss):
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+        super().__init__(size_average, reduce, reduction)
+        # Initialize any additional variables you need for your custom loss function here.
+
+    def forward(self, prediction, input):
+        loss = deephit_likelihood_1_torch(input, prediction)
+        return loss.to(torch.float32)
+
+
+
+
 
 # EH loss
 
