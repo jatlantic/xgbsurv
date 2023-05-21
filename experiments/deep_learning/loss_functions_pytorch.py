@@ -235,11 +235,13 @@ class EfronLoss(_Loss):
 
 # Deephit Loss - use adapted pycox loss
 
-def deephit_likelihood_1_torch(y, phi):
-    time, events = transform_back_torch_deephit(y)
+
+def deephit_likelihood_1_torch(y, phi, duration_bins):
+    #time, events = transform_back_torch_deephit(y)
+    time, events = transform_back_torch(y)
     #time = time.reshape(time.shape[0],1)
     #print('shape idx dur befoer', idx_durations.shape)
-    bins = torch.unique(time)
+    bins = duration_bins #torch.unique(time)
     idx_durations = (torch.bucketize(time, bins))
     idx_durations = idx_durations.view(-1, 1)
     #print('shape idx dur after', idx_durations.shape)
@@ -248,10 +250,12 @@ def deephit_likelihood_1_torch(y, phi):
     # pad phi as in pycox
     pad = torch.zeros_like(phi[:,:1])
     phi = torch.cat([phi, pad],axis=1)
-    print('phi shape', phi.shape)
+    #print('phi shape', phi.shape)
     # create durations index
     bins = torch.unique(time)
-
+    #print('idx_durations.max()',idx_durations.max())
+    #print('time', time)
+    #print('bins', bins)
     if phi.shape[1] <= idx_durations.max():
         raise ValueError(f"Network output `phi` is too small for `idx_durations`."+
                          f" Need at least `phi.shape[1] = {idx_durations.max().item()+1}`,"+
@@ -263,7 +267,7 @@ def deephit_likelihood_1_torch(y, phi):
     #phi = utils.pad_col(phi)
 
     gamma = phi.max(1)[0]
-    print('shapes', idx_durations.shape, phi.shape, gamma.shape, events.shape)
+    #print('shapes', idx_durations.shape, phi.shape, gamma.shape, events.shape)
     cumsum = phi.sub(gamma.view(-1, 1)).exp().cumsum(1)
     sum_ = cumsum[:, -1]
     part1 = phi.gather(1, idx_durations).view(-1).sub(gamma).mul(events)
@@ -271,17 +275,73 @@ def deephit_likelihood_1_torch(y, phi):
     part3 = sum_.sub(cumsum.gather(1, idx_durations).view(-1)).relu().add(epsilon).log().mul(1. - events)
     # need relu() in part3 (and possibly part2) because cumsum on gpu has some bugs and we risk getting negative numbers.
     loss = - part1.add(part2).add(part3)
-    return torch.sum(loss)
+    return loss.sum()
 
 
 class DeephitLoss(_Loss):
-    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+    def __init__(self, duration_bins = None, size_average=None, reduce=None, reduction: str = 'mean') -> None:
         super().__init__(size_average, reduce, reduction)
         # Initialize any additional variables you need for your custom loss function here.
+        self.duration_bins = duration_bins
 
     def forward(self, prediction, input):
-        loss = deephit_likelihood_1_torch(input, prediction)
+        #print('forward prediction', prediction)
+        #print('forward input', input)
+        loss = deephit_likelihood_1_torch(input, prediction, self.duration_bins)
         return loss.to(torch.float32)
+
+# def deephit_likelihood_1_torch(y, phi):
+#     #time, events = transform_back_torch_deephit(y)
+#     time, events = transform_back_torch(y)
+#     #time = time.reshape(time.shape[0],1)
+#     #print('shape idx dur befoer', idx_durations.shape)
+#     bins = torch.unique(time)
+#     idx_durations = (torch.bucketize(time, bins))
+#     idx_durations = idx_durations.view(-1, 1)
+#     #print('shape idx dur after', idx_durations.shape)
+#     # epsilon 
+#     epsilon = np.finfo(float).eps
+#     # pad phi as in pycox
+#     pad = torch.zeros_like(phi[:,:1])
+#     phi = torch.cat([phi, pad],axis=1)
+#     #print('phi shape', phi.shape)
+#     # create durations index
+#     bins = torch.unique(time)
+#     #print('idx_durations.max()',idx_durations.max())
+#     #print('time', time)
+#     #print('bins', bins)
+#     if phi.shape[1] <= idx_durations.max():
+#         raise ValueError(f"Network output `phi` is too small for `idx_durations`."+
+#                          f" Need at least `phi.shape[1] = {idx_durations.max().item()+1}`,"+
+#                          f" but got `phi.shape[1] = {phi.shape[1]}`")
+#     if events.dtype is torch.bool:
+#         events = events.float()
+#     #events = events.view(-1)
+#     #idx_durations = idx_durations.view(-1, 1)
+#     #phi = utils.pad_col(phi)
+
+#     gamma = phi.max(1)[0]
+#     #print('shapes', idx_durations.shape, phi.shape, gamma.shape, events.shape)
+#     cumsum = phi.sub(gamma.view(-1, 1)).exp().cumsum(1)
+#     sum_ = cumsum[:, -1]
+#     part1 = phi.gather(1, idx_durations).view(-1).sub(gamma).mul(events)
+#     part2 = - sum_.relu().add(epsilon).log()
+#     part3 = sum_.sub(cumsum.gather(1, idx_durations).view(-1)).relu().add(epsilon).log().mul(1. - events)
+#     # need relu() in part3 (and possibly part2) because cumsum on gpu has some bugs and we risk getting negative numbers.
+#     loss = - part1.add(part2).add(part3)
+#     return loss.sum()
+
+
+# class DeephitLoss(_Loss):
+#     def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+#         super().__init__(size_average, reduce, reduction)
+#         # Initialize any additional variables you need for your custom loss function here.
+
+#     def forward(self, prediction, input):
+#         #print('forward prediction', prediction)
+#         #print('forward input', input)
+#         loss = deephit_likelihood_1_torch(input, prediction)
+#         return loss.to(torch.float32)
 
 
 
@@ -412,10 +472,10 @@ def eh_likelihood_torch_2(
     sample_weight: torch.tensor = 1.0,
     bandwidth: torch.tensor = None
 ) -> torch.tensor:
-    print('linear_predictor shape',linear_predictor.shape)
-    print('linear_predictor type',type(linear_predictor))
-    y1 = y[:,0]
-    time, event = transform_back_torch(y1)
+    #print('linear_predictor shape',linear_predictor.shape)
+    #print('linear_predictor type',type(linear_predictor))
+    #y1 = y[:,0]
+    time, event = transform_back_torch(y)
     #time, event = transform_back_torch(y)
     # need two predictors here
     linear_predictor_1: torch.tensor = linear_predictor[:, 0] * sample_weight
@@ -484,8 +544,10 @@ class EHLoss(_Loss):
 
 # AFT loss
 
-def aft_likelihood_torch(linear_predictor: torch.Tensor, y: torch.Tensor, 
-    sample_weight: torch.Tensor = 1.0, bandwidth: torch.tensor = None) -> torch.Tensor:
+def aft_likelihood_torch(linear_predictor: torch.Tensor,
+    y: torch.Tensor, 
+    sample_weight: torch.Tensor = 1.0, 
+    bandwidth: torch.tensor = None) -> torch.Tensor:
 
     #print('y shape', y.shape)
     #print('linear predictor', linear_predictor.shape)
@@ -569,7 +631,7 @@ def ah_likelihood_torch(
     sample_weight=1.0,
     bandwidth = None
 
-):
+) -> torch.Tensor:
     
     if isinstance(linear_predictor, np.ndarray):
         linear_predictor = torch.from_numpy(linear_predictor)
@@ -592,10 +654,12 @@ def ah_likelihood_torch(
     linear_predictor: torch.tensor = linear_predictor * sample_weight
     if not bandwidth:
         bandwidth = 1.30 * torch.pow(n_samples, torch.tensor(-0.2))
+    # R_linear_predictor: torch.tensor = torch.log(
+    #     time * torch.exp(linear_predictor)
+    # )
     R_linear_predictor: torch.tensor = torch.log(
-        time * torch.exp(linear_predictor)
-    )
-
+        time) + linear_predictor
+    
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
     event_mask = event.bool()
     rv = torch.distributions.normal.Normal(0, 1, validate_args=None)
@@ -631,8 +695,8 @@ class AHLoss(_Loss):
         self.bandwidth = bandwidth
 
     def forward(self, prediction, input): #add bandwidth and sample weight
-        #print('input', input)
-        #print('prediction', prediction)
+        #print('input forward', input)
+        #print('prediction forward', prediction)
         loss = ah_likelihood_torch(prediction, input, bandwidth=self.bandwidth)
         return loss
     
