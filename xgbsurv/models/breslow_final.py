@@ -223,7 +223,7 @@ def breslow_estimator(log_hazard, time, event):
 
 # Looped version of breslow estimator
 
-@jit(nopython=True, cache=True, fastmath=True)
+#@jit(nopython=True, cache=True, fastmath=True)
 def breslow_estimator_loop(    
     predictor: np.array,
     time: np.array,
@@ -234,7 +234,9 @@ def breslow_estimator_loop(
     local_risk_set: float = np.sum(exp_predictor)
     event_mask: np.array = event.astype(np.bool_)
     n_unique_events: int = np.unique(time[event_mask]).shape[0]
-    cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
+    # unique event time does not work
+    #cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
+    cumulative_baseline_hazards: np.array = np.zeros(np.unique(time).shape)
     n_events_counted: int = 0
     local_death_set: int = 0
     accumulated_risk_set: float = 0
@@ -260,9 +262,12 @@ def breslow_estimator_loop(
         accumulated_risk_set += sample_predictor
         previous_time = sample_time
 
-    cumulative_baseline_hazards[n_events_counted] = local_death_set / (
+    cumulative_baseline_hazards[n_events_counted-1] = local_death_set / (
         local_risk_set
     )
+    # cumulative_baseline_hazards[n_events_counted] = local_death_set / (
+    #     local_risk_set
+    # )
 
     return (
         np.unique(time[event_mask]),
@@ -277,6 +282,12 @@ def get_cumulative_hazard_function_breslow(X_train: np.array,
     ) -> pd.DataFrame:
     # inputs necessary: train_time, train_event, train_preds,
     # TODO: slim down inputs of function to what is needed
+    for var in [X_train, X_train, y_train, y_train, predictor_train, predictor_test]:
+        if not isinstance(var, np.ndarray):
+                #print(type(var))
+                var = var.values #to_numpy()
+                #print(type(var))
+    #print('y_train breslow final', y_train)
     time_train, event_train = transform_back(y_train)
     time_test, event_test = transform_back(y_test)
     time_test = np.unique(time_test)

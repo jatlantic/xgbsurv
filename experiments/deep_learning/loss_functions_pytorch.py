@@ -517,10 +517,11 @@ def eh_likelihood_torch_2(
         sample_repeated_linear_predictor * integrated_kernel_matrix
     ).sum(axis=0)
     #print('integrated_kernel_sum', integrated_kernel_sum)
-    print(linear_predictor_2[event_mask].sum()/n_samples
-        , R_linear_predictor[event_mask].sum()/n_samples
-        , torch.log(inverse_sample_size_bandwidth * kernel_sum).sum()/n_samples
-        , torch.log(inverse_sample_size * integrated_kernel_sum).sum()/n_samples)
+    # print(linear_predictor_2[event_mask].sum()/n_samples
+    #     , R_linear_predictor[event_mask].sum()/n_samples
+    #     , torch.log(inverse_sample_size_bandwidth * kernel_sum).sum()/n_samples
+    #     , torch.log(inverse_sample_size * integrated_kernel_sum).sum()/n_samples)
+    
     likelihood: torch.tensor = inverse_sample_size * (
         linear_predictor_2[event_mask].sum()
         - R_linear_predictor[event_mask].sum()
@@ -538,7 +539,7 @@ class EHLoss(_Loss):
 
     def forward(self, prediction, input):
         loss = eh_likelihood_torch_2(prediction,input, bandwidth=self.bandwidth)
-        print('loss', loss)
+        #print('loss', loss)
         return loss
 
 
@@ -716,3 +717,192 @@ class AHLoss(_Loss):
 #         #    input = input.double()
 #         loss = aft_likelihood_torch(prediction, input, bandwidth=self.bandwidth)
 #         return loss
+
+# Cindex
+
+# TODO: Write in Pytorch, especially equivalent for add.reduceat()
+
+# def KaplanMeier(time: np.array, event: np.array, 
+#                 cens_dist: bool = False
+# ) -> tuple[np.array, np.array] | tuple[np.array,np.array,np.array]:
+#     """_summary_
+
+#     Parameters
+#     ----------
+#     time : npt.NDArray[float]
+#         _description_
+#     event : npt.NDArray[int]
+#         _description_
+#     cens_dist : bool, optional
+#         _description_, by default False
+
+#     Returns
+#     -------
+#     tuple[npt.NDArray[float], npt.NDArray[float]] | tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[int]]
+#         _description_
+    
+#     References
+#     ----------
+#     .. [1] Kaplan, E. L. and Meier, P., "Nonparametric estimation from incomplete observations",
+#            Journal of The American Statistical Association, vol. 53, pp. 457-481, 1958.
+#     .. [2] S. Pölsterl, “scikit-survival: A Library for Time-to-Event Analysis Built on Top of scikit-learn,”
+#            Journal of Machine Learning Research, vol. 21, no. 212, pp. 1–6, 2020.
+#     """
+#     # similar approach to sksurv, but no loops
+#     # even and censored is other way round in sksurv ->clarify
+#     #time, event = transform_back(y)
+#     # order, remove later
+
+#     # is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+    
+#     # if is_sorted(time) == False:
+#     #     order = np.argsort(time, kind="mergesort")
+#     #     time = time[order]
+#     #     event = event[order]
+    
+#     times = torch.unique(time)
+#     idx = torch.bucketize(time, np.unique(time))
+#     # numpy diff nth discrete difference over index, add 1 at the beginning
+#     breaks = torch.nonzero(torch.cat(([1], np.diff(idx)))).squeeze()
+
+#     # flatnonzero return indices that are nonzero in flattened version
+#     n_events = np.add.reduceat(event, breaks, axis=0)
+#     n_at_risk = np.sum(np.unique((np.outer(time,time)>=np.square(time)).astype(int).T,axis=0),axis=1)[::-1]
+    
+#     # censoring distribution for ipcw estimation
+#     #n_censored a vector, with 1 at censoring position, zero elsewhere
+#     if cens_dist:
+#         n_at_risk -= n_events
+#         # for each unique time step how many observations are censored
+#         censored = 1-event
+
+#         n_censored = np.add.reduceat(censored, breaks, axis=0)
+#         vals = 1-np.divide(
+#         n_censored, n_at_risk,
+#         out=np.zeros(times.shape[0], dtype=float),
+#         where=n_censored != 0,
+#     )
+        
+#         estimates = np.cumprod(vals)
+#         return times, estimates, n_censored
+
+
+#     else:
+#         vals = 1-np.divide(
+#         n_events, n_at_risk,
+#         out=np.zeros(times.shape[0], dtype=float),
+#         where=n_events != 0,
+#         )
+#         estimates = np.cumprod(vals)
+#         return times, estimates
+
+# def ipcw_estimate(time: np.array, event: np.array) -> tuple[np.array, np.array]:
+#     """IPCW
+
+#     Parameters
+#     ----------
+#     time : npt.NDArray[float]
+#         _description_
+#     event : npt.NDArray[int]
+#         _description_
+
+#     Returns
+#     -------
+#     tuple[npt.NDArray[float], npt.NDArray[float]]
+#         _description_
+#     """
+#     time, event = time.to_numpy(), event.to_numpy()
+#     unique_time, cens_dist, n_censored = KaplanMeier(time, event, cens_dist=True) 
+#     #print(cens_dist)
+#     # similar approach to sksurv
+#     idx = np.searchsorted(unique_time, time)
+#     est = 1.0/cens_dist[idx] # improve as divide by zero
+#     est[n_censored[idx]!=0] = 0
+#     # in R mboost there is a maxweight of 5
+#     est[est>5] = 5
+#     return torch.from_numpy(unique_time), torch.from_numpy(est)
+
+# def compute_weights(y: npt.NDArray[float], approach: str='paper') -> npt.NDArray[float]:
+#     """_summary_
+
+#     Parameters
+#     ----------
+#     y : npt.NDArray[float]
+#         Sorted array containing survival time and event where negative value is taken as censored event.
+#     approach : str, optional
+#         Choose mboost implementation or paper implementation of c-boosting, by default 'paper'.
+
+#     Returns
+#     -------
+#     npt.NDArray[float]
+#         Array of weights.
+
+#     References
+#     ----------
+#     .. [1] 1. Mayr, A. & Schmid, M. Boosting the concordance index for survival data–a unified framework to derive and evaluate biomarker combinations. 
+#        PloS one 9, e84483 (2014).
+
+#     """
+#     time, event = transform_back(y) 
+#     n = event.shape[0]
+
+#     _, ipcw_new = ipcw_estimate(time, event)
+
+#     ipcw = ipcw_new #ipcw_old
+#     survtime = time
+#     wweights = np.full((n,n), np.square(ipcw)).T # good here
+
+
+#     weightsj = np.full((n,n), survtime).T
+
+#     weightsk = np.full((n,n), survtime) #byrow = TRUE in R, in np automatic no T required
+
+#     if approach == 'mboost':
+#         # implementing   weightsI <- ifelse(weightsj == weightsk, .5, (weightsj < weightsk) + 0) - diag(.5, n,n)
+#         # from mboost github repo
+#         weightsI = np.empty((n,n))
+#         weightsI[weightsj == weightsk] = 0.5
+#         weightsI = (weightsj < weightsk).astype(int)
+#         weightsI = weightsI - np.diag(0.5*np.ones(n))
+#     if approach == 'paper':
+#         weightsI = (weightsj < weightsk).astype(int) 
+
+#     wweights = wweights * weightsI 
+    
+#     wweights = wweights / np.sum(wweights)
+
+#     return wweights
+
+
+
+# def cind_loss(y: npt.NDArray[float], predictor: npt.NDArray[float], sigma: npt.NDArray[float] = 0.1) -> npt.NDArray[float]:
+#     """Generate negative loglikelihood (loss) according to C-boosting model by Mayr and Schmid. Assumes times have been sorted beforehand.
+
+#     Parameters
+#     ----------
+#     y : npt.NDArray[float]
+#         Sorted array containing survival time and event where negative value is taken as censored event.
+#     predictor : npt.NDArray[float]
+#         Estimated hazard.
+#     sigma : npt.NDArray[float], optional
+#         _description_, by default 0.1.
+
+#     Returns
+#     -------
+#     npt.NDArray[float]
+#         Negative loglikelihood (loss) according to C-boosting model by Mayr and Schmid.
+
+#     References
+#     ----------
+#     .. [1] 1. Mayr, A. & Schmid, M. Boosting the concordance index for survival data–a unified framework to derive and evaluate biomarker combinations. 
+#        PloS one 9, e84483 (2014).
+#     """
+#     # f corresponds to predictor in paper
+#     time, _ = transform_back(y)
+#     n = time.shape[0]
+#     etaj = np.full((n,n), predictor)
+#     etak = np.full((n,n), predictor).T
+#     x = (etak - etaj) 
+#     weights_out = compute_weights(y)
+#     c_loss = 1/(1+np.exp(x/sigma))*weights_out
+#     return -np.sum(c_loss)

@@ -62,6 +62,12 @@ def transform_back(y: npt.NDArray[float]) -> tuple[npt.NDArray[float], npt.NDArr
 def sort_X_y(X, y):
     # naming convention as in sklearn
     # add sorting here, maybe there is a faster way
+
+    # if not isinstance(y, np.ndarray):
+    #     y_sort = y.to_numpy().copy()
+    # else:
+    #     y_sort = y.copy()
+
     y_abs = np.absolute(y)
     if np.all(np.diff(y_abs) >= 0) is False:
         #print('Values are being sorted!')
@@ -70,11 +76,14 @@ def sort_X_y(X, y):
         X = X[order]
     return X, y
 
-
 def sort_X_y_pandas(X, y):
     # naming convention as in sklearn
+    if y.ndim>1:
+        y_sort = y.iloc[:, 0]
+    else:
+        y_sort = y
     # add sorting here, maybe there is a faster way
-    y_abs = np.absolute(y.values)
+    y_abs = np.absolute(y_sort.values)
     if np.all(np.diff(y_abs) >= 0) is False:
         #print('Values are being sorted!')
         order = np.argsort(y_abs, kind="mergesort")

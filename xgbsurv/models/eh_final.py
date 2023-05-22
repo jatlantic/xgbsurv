@@ -110,7 +110,7 @@ def eh_likelihood(
         + np.log(inverse_sample_size_bandwidth * kernel_sum).sum()
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
-    print('-likelihood',-likelihood)
+    #print('-likelihood',-likelihood)
     return -likelihood
 
 
@@ -196,7 +196,7 @@ def eh_gradient(
     sample_weight: np.array = 1.0,
 ) -> np.array:
     # XGBoost limitation
-    print(y.shape)
+    #print(y.shape)
     y1 = y[:, 0]
     time, event = transform_back(y1)
     n_samples: int = time.shape[0]
@@ -578,9 +578,10 @@ def eh_objective(
     bandwidth: float = None,
     hessian_modification_strategy: str = "eps",
 ):  
-    print('y shape', y.shape)
+    #print('y shape', y.shape)
     y = y.reshape(linear_predictor.shape)
     gradient = eh_gradient(y,linear_predictor).reshape(-1)
+    #print('gradien eh shape',gradient.shape)
     #hessian = 
     return gradient, np.ones(gradient.shape[0])
 

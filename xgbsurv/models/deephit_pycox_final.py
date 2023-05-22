@@ -89,7 +89,7 @@ def pycox_gradient_no_gamma(y, phi):
     idx_durations_part2 = (np.digitize(time, bins)).reshape(-1, 1)
     n,k = phi.shape
     part1 = np.zeros_like(phi)
-    np.put_along_axis(part1, idx_durations_part1,event.reshape(n, 1), axis=1)
+    np.put_along_axis(part1, idx_durations_part1, event.reshape(n, 1), axis=1)
     #part1 = event.reshape(n, 1)
     #print('part1', part1)
     phi_exp = np.exp(phi)
