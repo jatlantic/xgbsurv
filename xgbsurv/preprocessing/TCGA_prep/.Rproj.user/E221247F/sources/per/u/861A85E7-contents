@@ -1,0 +1,85 @@
+library(glmnet)
+library(survival)
+cancer <- "BLCA"
+data <- vroom::vroom("./data/processed/TCGA/BLCA_data_preprocessed.csv")[, -1]
+X <- data[, -(1:2)]
+y <- data[, 1:2]
+
+splits <- vroom::vroom("./data/splits/TCGA/BLCA_train_splits.csv")
+splits <- as.vector(unlist(splits[1, ]))
+splits <- splits[!is.na(splits)] + 1
+
+library(fastcox)
+
+ix <- sort(y$OS_days, index.return = TRUE)$ix
+
+X <- data[ix, -(1:2)]
+y <- data[ix, 1:2]
+
+library(microbenchmark)
+microbenchmark(
+  glmnet(
+    x = as.matrix(X),
+    y = Surv(y$OS_days, y$OS),
+    family = "cox",
+    lambda.min.ratio = 0.05,
+    thresh = 1e-07
+  ),
+  times = 3L
+)
+
+library(fastDummies)
+
+X_non_const <- X[,apply(X, 2, var, na.rm=TRUE) != 0]
+
+lel <-   glmnet(
+  x = as.matrix(scale(X_non_const)),
+  y = Surv(y$OS_days, y$OS),
+  family = "cox",
+  lambda.min.ratio = 0.01,
+  thresh = 1e-07,
+  standardize = FALSE
+)
+
+set.seed(42)
+x <- matrix(rnorm(1000, 0, 1), nrow = 100, ncol = 10)
+y <- rnorm(100) + 10 * x[, 1]
+weights <- runif(100, 0, 1)
+hm <- glmnet(x, y, weights = weights)
+
+glmnet()
+
+sum(abs(attr(coxgrad(
+  rep(0, nrow(X)),
+  Surv(y$OS_days, y$OS),
+  diag.hessian = TRUE
+), "diag_hessian")))
+aha <- cocktail(
+  x = as.matrix(X),
+  y = y$OS_days,
+  d = y$OS,
+  #family = "cox",
+  lambda.min = 0.5,
+  eps = 1e-07
+)
+
+microbenchmark(
+cocktail(
+  x = as.matrix(X),
+  y = y$OS_days,
+  d = y$OS,
+  #family = "cox",
+  lambda.min = 0.05,
+  eps = 1e-07
+), times = 3L
+
+)
+
+
+hm <-   glmnet(
+  x = as.matrix(X),
+  y = Surv(y$OS_days, y$OS),
+  family = "cox",
+  lambda.min.ratio = 0.01,
+  maxit = 1e+04
+)

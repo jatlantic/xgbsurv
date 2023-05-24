@@ -1,0 +1,93 @@
+library(ggplot2)
+library(vroom)
+library(rjson)
+config <- rjson::fromJSON(
+  file = here::here("config.json")
+)
+
+en_concordance <- vroom::vroom(
+  here::here(
+    "results", "elastic_net_concordance.csv"
+  )
+)
+
+precond_concordance <- vroom::vroom(
+  here::here(
+    "results", "precond_concordance.csv"
+  )
+)
+
+precond_naive_concordance <- vroom::vroom(
+  here::here(
+    "results", "precond_naive_concordance.csv"
+  )
+)
+
+plt_frame <- data.frame()
+
+for (i in config$datasets) {
+  plt_frame <- rbind(
+    plt_frame,
+    data.frame(
+      conc = en_concordance[[i]],
+      cancer = i,
+      type = "elastic_net"
+    )
+  )
+  
+  plt_frame <- rbind(
+    plt_frame,
+    data.frame(
+      conc = precond_concordance[[i]],
+      cancer = i,
+      type = "PC"
+    )
+  )
+  
+  plt_frame <- rbind(
+    plt_frame,
+    data.frame(
+      conc = precond_naive_concordance[[i]],
+      cancer = i,
+      type = "PC Naive"
+    )
+  )
+}
+library(dplyr)
+
+plt_frame %>% ggplot(aes(x = type, y = conc)) + geom_boxplot() + facet_wrap(~cancer, scales = "free_y")
+
+sparsity_naive <- vroom::vroom(here::here("results/glmnet_precond_sparsity.csv"))
+
+sparsity_ours <- vroom::vroom(here::here("results/lab_results/results/efron_precond_sparsity.csv"))
+
+sparsity_en <- vroom::vroom(here::here("results/lab_results/results/efron_elastic_net_sparsity.csv"))
+
+plt_frame <- data.frame()
+for (i in config$datasets[-1]) {
+  plt_frame <- rbind(plt_frame,
+                     
+                     data.frame(coefs = sparsity_naive[[i]],
+                                type = "PC Naive",
+                                cancer = i
+                                )
+                     )
+  
+  plt_frame <- rbind(plt_frame,
+                     
+                     data.frame(coefs = sparsity_ours[[i]],
+                                type = "PC",
+                                cancer = i
+                     )
+  )
+  
+  plt_frame <- rbind(plt_frame,
+                     
+                     data.frame(coefs = sparsity_en[[i]],
+                                type = "Elastic net",
+                                cancer = i
+                     )
+  )
+}
+
+plt_frame %>% ggplot(aes(x=type, y = coefs)) + geom_boxplot() + facet_wrap(~cancer)

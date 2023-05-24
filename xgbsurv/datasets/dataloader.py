@@ -35,6 +35,20 @@ def load_metabric(*, path="datasets/data/", return_X_y=False, as_frame=False):
         "ER_positive",
         "age"
     ]
+    # datatypes
+    datatypes = {
+    'MKI67': np.float32,
+    'EGFR': np.float32, 
+    'PGR': np.float32,
+    'ERBB2': np.float32, 
+    'hormone_treatment': np.uint8, 
+    'radiotherapy': np.uint8, 
+    'chemotherapy': np.uint8, 
+    'ER_positive': np.uint8, 
+    'age': np.float32,
+    #'time':np.float32,
+    #'event': np.float32
+    }
 
     frame = None
     target_columns = [
@@ -58,19 +72,18 @@ def load_metabric(*, path="datasets/data/", return_X_y=False, as_frame=False):
     target = transform(df.time.to_numpy(),df.event.to_numpy())
     data = df.iloc[:,:-2].to_numpy()
 
-    # make sure data type is correct
-    data, target = data.astype(np.float32), target.astype(np.float32)
-
     if as_frame:
         frame, data, target = _convert_data_dataframe(
             "load_metabric", data, target, feature_names, target_columns
         )
         #return data, target
     
+    # make sure data type is correct
+    target = target.astype(np.float32)
+    data = data.astype(datatypes)
+
     if return_X_y:
         return data, target
-    #else:
-        #raise NotImplementedError('Bunch object is not implemented.')
 
     return Bunch(
             data=data,
@@ -104,6 +117,16 @@ def load_flchain(*, path="datasets/data/", return_X_y=False, as_frame=False):
         "mgus"
     ]
 
+    datatypes = {
+    'age': np.float32,
+    'sex': np.uint8, 
+    'sample_yr': np.float32, 
+    'kappa': np.float32, 
+    'lambda': np.float32, 
+    'flc_grp': np.float32, 
+    'creatinine': np.float32, 
+    'mgus': np.uint8}
+
     frame = None
     target_columns = [
         "target"
@@ -131,19 +154,12 @@ def load_flchain(*, path="datasets/data/", return_X_y=False, as_frame=False):
         frame, data, target = _convert_data_dataframe(
             "load_flchain", data, target, feature_names, target_columns
         )
-        data = data.astype(np.float32)
-        # change to categorical
-        data['sex'] = data['sex'].astype('category')
-        data['mgus'] = data['mgus'].astype('category')
-        target = target.astype(np.float32)
-        #print(target.dtypes)
-        #print(data.dtypes)
-        #return data, target
+    data = data.astype(datatypes)
+    target = target.astype(np.float32)
+
     
     if return_X_y:
         return data, target
-    #else:
-        #raise NotImplementedError('Bunch object is not implemented.')
 
     return Bunch(
             data=data,
@@ -182,6 +198,22 @@ def load_support(*, path="datasets/data/", return_X_y=False, as_frame=False):
         "serum_creatinine"
     ]
 
+    datatypes = {
+        'age': np.float32,
+        'sex': np.uint8, 
+        'race': np.object,
+        'n_comorbidities': np.float32,
+        'diabetes': np.uint8, 
+        'dementia': np.uint8,
+        'cancer': np.object,
+        'blood_pressure': np.float32,
+        'heart_rate': np.float32,
+        'respiration_rate': np.float32,
+        'temperature': np.float32, 
+        'white_blood_cell': np.float32, 
+        'serum_sodium': np.float32, 
+        'serum_creatinine': np.float32}
+
     frame = None
     target_columns = [
         "target"
@@ -209,13 +241,10 @@ def load_support(*, path="datasets/data/", return_X_y=False, as_frame=False):
         frame, data, target = _convert_data_dataframe(
             "load_support", data, target, feature_names, target_columns
         )
-        data = data.astype(np.float32)
-        # categorical vars
-        data['sex'] = data['sex'].astype('category')
-        data['diabetes'] = data['diabetes'].astype('category')
-        data['dementia'] = data['dementia'].astype('category')
-        data['cancer'] = data['cancer'].astype('category')
-        target = target.astype(np.float32)
+    data = data.astype(datatypes)
+    # categorical vars
+    data['cancer'] = data['cancer'].astype('category')
+    target = target.astype(np.float32)
     
     if return_X_y:
         return data, target
@@ -251,6 +280,14 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
         "progesterone",
         "estrogene"
     ]
+    datatypes = {
+    'horm_treatment': np.uint8, 
+    'grade': np.object,
+    'menopause': np.uint8, 
+    'age': np.float32, 
+    'n_positive_nodes': np.float32, 
+    'progesterone': np.float32, 
+    'estrogene': np.float32}
 
     frame = None
     target_columns = [
@@ -279,11 +316,11 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
             "load_rgbsg", data, target, feature_names, target_columns
         )
         #return data, target
-        data = data.astype(np.float32)
-        data['horm_treatment'] = data['horm_treatment'].astype('category')
-        data['menopause'] = data['menopause'].astype('category')
-        data['grade'] = data['grade'].astype('category')
-        target = target.astype(np.float32)
+    data = data.astype(datatypes)
+    #data['horm_treatment'] = data['horm_treatment'].astype('category')
+    #data['menopause'] = data['menopause'].astype('category')
+    data['grade'] = data['grade'].astype('category')
+    target = target.astype(np.float32)
     
     if return_X_y:
         return data, target

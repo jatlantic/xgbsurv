@@ -236,7 +236,8 @@ def breslow_estimator_loop(
     n_unique_events: int = np.unique(time[event_mask]).shape[0]
     # unique event time does not work
     #cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
-    cumulative_baseline_hazards: np.array = np.zeros(np.unique(time).shape)
+    # old modification cumulative_baseline_hazards: np.array = np.zeros(np.unique(time).shape)
+    cumulative_baseline_hazards: np.array = np.zeros(n_unique_events)
     n_events_counted: int = 0
     local_death_set: int = 0
     accumulated_risk_set: float = 0
@@ -262,9 +263,14 @@ def breslow_estimator_loop(
         accumulated_risk_set += sample_predictor
         previous_time = sample_time
 
-    cumulative_baseline_hazards[n_events_counted-1] = local_death_set / (
-        local_risk_set
-    )
+    if local_death_set:
+        cumulative_baseline_hazards[n_events_counted] = local_death_set / (
+            local_risk_set
+        )
+
+    # old modification: cumulative_baseline_hazards[n_events_counted-1] = local_death_set / (
+    #     local_risk_set
+    # )
     # cumulative_baseline_hazards[n_events_counted] = local_death_set / (
     #     local_risk_set
     # )

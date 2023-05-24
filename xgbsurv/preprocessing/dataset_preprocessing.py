@@ -136,8 +136,10 @@ def tcga_preprocess(path="add your path here"):
     print(os.getcwd())
     for name in cancer_names:
         print(name)
-        filename="original_data/TCGA/"+name+'.csv'
+        filename="original_data/TCGA/"+name+'_data_preprocessed.csv'
         df = pd.read_csv(path+filename)
+        # rename time, event cols
+        df = df.rename(columns={'OS': 'event', 'OS_days': 'time'})
         # drop patient id column
         df.drop(['patient_id'],axis=1, inplace=True)
         # remove zero time observations
@@ -151,7 +153,7 @@ def tcga_preprocess(path="add your path here"):
         df.to_csv(path+"data/"+name+"_adapted.csv", index=False)
     return
 
-#tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
+tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
 
 #/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/original_data/TCGA
 

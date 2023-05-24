@@ -134,3 +134,6 @@ dmypy.json
 # json files
 *.json
 
+# zip files
+*.zip
+

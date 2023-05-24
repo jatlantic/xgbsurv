@@ -17,7 +17,7 @@ from xgbsurv.models.utils import transform_back
 from xgboost import XGBRegressor
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 # dicts of objective, loss and prediction functions
 
 loss_dict= {'breslow_loss': breslow_likelihood, 'efron_loss': efron_likelihood, \
@@ -34,6 +34,24 @@ pred_dict =  {'breslow_objective': get_cumulative_hazard_function_breslow, \
               'efron_objective': get_cumulative_hazard_function_efron, \
               'aft_objective': aft_get_cumulative_hazard_function
                 }
+
+
+# class CustomSplit(StratifiedKFold):
+#     def __init__(self, n_splits=2, shuffle=True, random_state=42):
+#         super().__init__(n_splits=n_splits, shuffle=shuffle, random_state=random_state)
+
+#     def split(self, X, y, groups=None):
+#         print('split', X.dtypes)
+#         try:
+#             if y.shape[1]>1:
+#                 y = y[:,0]
+#         except:
+#             pass
+#         bins = np.sign(y)
+#         return super().split(X, bins, groups=groups)
+
+#     def get_n_splits(self, X=None, y=None, groups=None):
+#         return self.n_splits
 
 class XGBSurv(XGBRegressor):
 
@@ -62,7 +80,7 @@ class XGBSurv(XGBRegressor):
 
     def fit(self, X, y, *, eval_test_size=None, **kwargs):
 
-        X, y = self._sort_X_y(X,y)
+
         # TODO: remove for efficiency
         self.y = y
         self.X = X
@@ -80,19 +98,20 @@ class XGBSurv(XGBRegressor):
             #TODO: Potentially swap for k-fold to have better event distribution
             #TODO: verify for deephit split
             #target_sign = np.sign(y) beware of deephit dims
-            X_train, X_test, y_train, y_test = train_test_split(
-                X, y, test_size=eval_test_size, random_state=params['random_state']) #, stratify=target_sign
+            X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=eval_test_size, random_state=params['random_state'], stratify=np.sign(y)) #, stratify=target_sign
+            
+            X_train, y_train = self._sort_X_y(X_train, y_train)
+            X_test, y_test = self._sort_X_y(X_test, y_test)
             
             #eval_set = [(X_test, y_test)]
-            
             # Could add (X_train, y_train) to eval_set 
             # to get .eval_results() for both train and test
-            eval_set = [(X_train, y_train),(X_test, y_test)] 
-            
+            eval_set = [(X_train, y_train),(X_test, y_test)]
             kwargs['eval_set'] = eval_set
             
             return super(XGBSurv, self).fit(X_train, y_train, **kwargs)
         else:
+            X, y = self._sort_X_y(X,y)
             return super(XGBSurv, self).fit(X, y, **kwargs)
         
     # TODO: DataFrame Option
@@ -197,6 +216,11 @@ class XGBSurv(XGBRegressor):
     def _sort_X_y(self, X, y):
         # naming convention as in sklearn
         # add sorting here, maybe there is a faster way
+        if isinstance(y, pd.Series):
+            y = y.values
+        if not isinstance(y, np.ndarray):
+            print('y error',y, type(y))
+            raise ValueError(f'y is not numpy.ndarray. Got {type(y)}.')
         y_abs = np.absolute(y)
         if np.all(np.diff(y_abs) >= 0) is False:
             #print('Values are being sorted!')
