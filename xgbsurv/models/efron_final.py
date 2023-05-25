@@ -25,6 +25,7 @@ def efron_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[floa
     """
     # Assumes times have been sorted beforehand.
     time, event = transform_back(y)
+    n_events = np.sum(event)
     partial_hazard = np.exp(log_partial_hazard)
     samples = time.shape[0]
     previous_time = time[0]
@@ -66,7 +67,7 @@ def efron_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[floa
         likelihood -= np.log(
             risk_set_sum - ((ell / death_set_count) * death_set_risk)
         )
-    return -likelihood
+    return -likelihood/n_events
 
 
 
@@ -162,6 +163,7 @@ def efron_objective(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[float
     death_set_risk = 0
     local_risk_set_death = 0
     local_risk_set_hessian_death = 0
+    
 
     for i in range(samples):
         risk_set_sum += partial_hazard[i]
@@ -282,11 +284,12 @@ def efron_estimator(
             local_death_set_risk += sample_exp_predictor
         accumulated_risk_set += sample_exp_predictor
         previous_time = sample_time
-
-    for ell in range(local_death_set):
-        cumulative_baseline_hazards[n_events_counted] += 1 / (
-            local_risk_set - (ell / local_death_set) * local_death_set_risk
-        )
+        
+    if local_death_set:
+        for ell in range(local_death_set):
+            cumulative_baseline_hazards[n_events_counted] += 1 / (
+                local_risk_set - (ell / local_death_set) * local_death_set_risk
+            )
 
     return (
         np.unique(time[event_mask]),

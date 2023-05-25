@@ -68,6 +68,10 @@ def sort_X_y(X, y):
     # else:
     #     y_sort = y.copy()
 
+    # if y.ndim>1:
+    #     y_sort = y[:, 0]
+    # else:
+    #     y_sort = y
     y_abs = np.absolute(y)
     if np.all(np.diff(y_abs) >= 0) is False:
         #print('Values are being sorted!')
@@ -79,13 +83,14 @@ def sort_X_y(X, y):
 def sort_X_y_pandas(X, y):
     # naming convention as in sklearn
     if y.ndim>1:
-        y_sort = y.iloc[:, 0]
+        y_sort = y.iloc[:, 0].values
     else:
-        y_sort = y
+        y_sort = y.values
     # add sorting here, maybe there is a faster way
-    y_abs = np.absolute(y_sort.values)
-    if np.all(np.diff(y_abs) >= 0) is False:
-        #print('Values are being sorted!')
+    y_abs = np.absolute(y_sort)
+
+    if np.all(np.diff(y_abs) >= 0)==False:
+        print('Values are being sorted!')
         order = np.argsort(y_abs, kind="mergesort")
         X = X.reindex(order)
         y = y.reindex(order)

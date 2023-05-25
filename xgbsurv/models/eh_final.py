@@ -7,7 +7,7 @@ import math
 from math import exp, sqrt, pi, erf, pow
 from xgbsurv.models.utils import transform, transform_back
 import pandas as pd
-from scipy.integrate import quad
+from scipy.integrate import quadrature
 
 PDF_PREFACTOR: float = 0.3989424488876037
 SQRT_TWO: float = 1.4142135623730951
@@ -336,7 +336,7 @@ def eh_gradient(
         else:
             gradient_1[_] = gradient_three
             gradient_2[_] = gradient_five
-
+    
     return np.stack((np.negative(gradient_1),np.negative(gradient_2)), axis=1)
 
 
@@ -583,32 +583,37 @@ def eh_objective(
     gradient = eh_gradient(y,linear_predictor).reshape(-1)
     #print('gradien eh shape',gradient.shape)
     #hessian = 
-    return gradient, np.ones(gradient.shape[0])
+    return gradient, 0.01*np.ones(gradient.shape[0])
 
 
 
-@jit(nopython=True, cache=True, fastmath=True)
+#@jit(nopython=True, cache=True, fastmath=True)
 def baseline_hazard_estimator_eh(
     time,
-    y_train,
-    train_eta,
+    time_train,
+    event_train,
+    predictor_train,
+    #time,
+    #y_train,
+    #train_eta,
 ):
     #EPS: float = 2.220446049250313e-16
-    train_time, train_event = transform_back(y_train)
-    n_samples: int = train_time.shape[0]
+    #train_time, train_event = transform_back(y_train)
+    n_samples: int = time_train.shape[0]
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     inverse_bandwidth: float = 1 / bandwidth
     inverse_sample_size: float = 1 / n_samples
     inverse_bandwidth_sample_size: float = (
         inverse_sample_size * (1 / (time + EPS)) * inverse_bandwidth
     )
-    log_time: float = time
-    train_eta_1 = train_eta[:,0]
-    train_eta_2 = train_eta[:,1]
+    #log_time: float = time
+    log_time: float = np.log(time + EPS)
+    train_eta_1 = predictor_train[:,0]
+    train_eta_2 = predictor_train[:,1]
     h_prefactor = np.exp(train_eta_2-train_eta_1)
     #print('h_prefactor', h_prefactor)
     #print('h_prefactor shape', h_prefactor.shape)
-    R_lp: np.array = np.log(train_time * np.exp(train_eta))
+    R_lp: np.array = np.log(time_train * np.exp(predictor_train[:,0]))
     difference_lp_log_time: np.array = (R_lp - log_time) / bandwidth
     numerator: float = 0.0
     denominator: float = 0.0
@@ -616,19 +621,33 @@ def baseline_hazard_estimator_eh(
         difference: float = difference_lp_log_time[_]
         #print('difference', difference)
         #print('difference shape', difference.shape)
-        denominator += h_prefactor * gaussian_integrated_kernel(difference)
-        if train_event[_]:
+        # add _here
+        denominator += h_prefactor[_] * gaussian_integrated_kernel(difference)
+        if event_train[_]:
             numerator += gaussian_kernel(difference)
     numerator = inverse_bandwidth_sample_size * numerator
     denominator = inverse_sample_size * denominator
 
     return numerator / denominator
 
-def predict_cumulative_hazard_function(self, X, time):
-    # Assume theta \in R^{nx2}, where theta[:, 0] = h1, and
-    # theta[:, 1] = h2.
-    theta: np.array = np.exp(self.predict(X))
-    n_samples: int = X.shape[0]
+
+def get_cumulative_hazard_function_eh(
+    #time,
+    #time_train,
+    #event_train,
+    X_train, 
+    X_test, 
+    y_train, 
+    y_test,
+    predictor_train,
+    predictor_test,
+    granularity=10.0,
+):
+    time_test, event_test = transform_back(y_test[:,0])
+    time: np.array = time_test #[:,0]
+    time_train, event_train = transform_back(y_train[:,0])
+    theta: np.array = np.exp(predictor_test)
+    n_samples: int = predictor_test.shape[0]
 
     zero_flag: bool = False
     if 0 not in time:
@@ -639,22 +658,79 @@ def predict_cumulative_hazard_function(self, X, time):
         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
 
     def hazard_function_integrate(s):
-        return self.predict_baseline_hazard_function(s)
+        return baseline_hazard_estimator_eh(
+            time=s,
+            time_train=time_train,
+            event_train=event_train,
+            predictor_train=predictor_train,
+        )
+
+    integration_times = np.arange(
+        start=np.round(np.min(theta[:, 0]) * np.min(time)),
+        stop=np.round(np.max(theta[:, 0]) * np.max(time)),
+        step=granularity,
+    )
+    integration_times = np.concatenate([[0], integration_times])
+
+    integration_values = np.zeros(integration_times.shape[0])
+    for _ in range(1, integration_values.shape[0]):
+        integration_values[_] = (
+            integration_values[_ - 1]
+            + quadrature(
+                func=hazard_function_integrate,
+                a=integration_times[_ - 1],
+                b=integration_times[_],
+                vec_func=False,
+            )[0]
+        )
 
     for _ in range(n_samples):
-        for ix, q in enumerate(time):
-            if q == 0:
-                cumulative_hazard[_, ix] = 0.0
-            else:
-                cumulative_hazard[_, ix] = (
-                    quad(hazard_function_integrate, 0, q * theta[_, 0])[0]
-                    * theta[_, 1]
-                    / theta[_, 0]
+        cumulative_hazard[_] = (
+            integration_values[
+                np.digitize(
+                    x=time * theta[_, 0], bins=integration_times, right=False
                 )
+                - 1
+            ]
+            * theta[_, 1]
+            / theta[_, 0]
+        )
     if zero_flag:
         cumulative_hazard = cumulative_hazard[:, 1:]
         time = time[1:]
-    return pd.DataFrame(cumulative_hazard, columns=time)
+    return pd.DataFrame(cumulative_hazard, columns=time).T.sort_index(axis=0)
+
+# def predict_cumulative_hazard_function(self, X, time):
+#     # Assume theta \in R^{nx2}, where theta[:, 0] = h1, and
+#     # theta[:, 1] = h2.
+#     theta: np.array = np.exp(self.predict(X))
+#     n_samples: int = X.shape[0]
+
+#     zero_flag: bool = False
+#     if 0 not in time:
+#         zero_flag = True
+#         time = np.concatenate([np.array([0]), time])
+#         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+#     else:
+#         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
+
+#     def hazard_function_integrate(s):
+#         return self.predict_baseline_hazard_function(s)
+
+#     for _ in range(n_samples):
+#         for ix, q in enumerate(time):
+#             if q == 0:
+#                 cumulative_hazard[_, ix] = 0.0
+#             else:
+#                 cumulative_hazard[_, ix] = (
+#                     quad(hazard_function_integrate, 0, q * theta[_, 0])[0]
+#                     * theta[_, 1]
+#                     / theta[_, 0]
+#                 )
+#     if zero_flag:
+#         cumulative_hazard = cumulative_hazard[:, 1:]
+#         time = time[1:]
+#     return pd.DataFrame(cumulative_hazard, columns=time)
 
 
 

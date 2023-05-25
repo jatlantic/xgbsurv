@@ -26,12 +26,11 @@ def breslow_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[fl
     npt.NDArray[float]
         Negative loglikelihood (loss) according to Breslow.
     """
-    time, event = transform_back(y)
     # Assumes times have been sorted beforehand.
+    time, event = transform_back(y)
     partial_hazard = np.exp(log_partial_hazard)
     n_events = np.sum(event)
     n_samples = time.shape[0]
-    #print(n_samples)
     previous_time = time[0]
     risk_set_sum = 0
     likelihood = 0
@@ -56,7 +55,6 @@ def breslow_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[fl
 
         previous_time = current_time
         accumulated_sum += partial_hazard[k]
-    #print(likelihood)
     final_likelihood = -likelihood / n_events #n_samples
     return final_likelihood
 
