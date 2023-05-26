@@ -153,7 +153,7 @@ def tcga_preprocess(path="add your path here"):
         df.to_csv(path+"data/"+name+"_adapted.csv", index=False)
     return
 
-tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
+#tcga_preprocess(path="/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/")
 
 #/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/original_data/TCGA
 

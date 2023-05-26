@@ -76,11 +76,12 @@ def load_metabric(*, path="datasets/data/", return_X_y=False, as_frame=False):
         frame, data, target = _convert_data_dataframe(
             "load_metabric", data, target, feature_names, target_columns
         )
+        data = data.astype(datatypes)
         #return data, target
     
     # make sure data type is correct
     target = target.astype(np.float32)
-    data = data.astype(datatypes)
+
 
     if return_X_y:
         return data, target
@@ -154,7 +155,7 @@ def load_flchain(*, path="datasets/data/", return_X_y=False, as_frame=False):
         frame, data, target = _convert_data_dataframe(
             "load_flchain", data, target, feature_names, target_columns
         )
-    data = data.astype(datatypes)
+        data = data.astype(datatypes)
     target = target.astype(np.float32)
 
     
@@ -201,11 +202,11 @@ def load_support(*, path="datasets/data/", return_X_y=False, as_frame=False):
     datatypes = {
         'age': np.float32,
         'sex': np.uint8, 
-        'race': np.object,
+        'race': np.object_,
         'n_comorbidities': np.float32,
         'diabetes': np.uint8, 
         'dementia': np.uint8,
-        'cancer': np.object,
+        'cancer': np.object_,
         'blood_pressure': np.float32,
         'heart_rate': np.float32,
         'respiration_rate': np.float32,
@@ -241,9 +242,10 @@ def load_support(*, path="datasets/data/", return_X_y=False, as_frame=False):
         frame, data, target = _convert_data_dataframe(
             "load_support", data, target, feature_names, target_columns
         )
-    data = data.astype(datatypes)
-    # categorical vars
-    data['cancer'] = data['cancer'].astype('category')
+        data = data.astype(datatypes)
+        # categorical vars
+        data['cancer'] = data['cancer'].astype('category')
+        data['race'] = data['race'].astype('category')
     target = target.astype(np.float32)
     
     if return_X_y:
@@ -282,7 +284,7 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
     ]
     datatypes = {
     'horm_treatment': np.uint8, 
-    'grade': np.object,
+    'grade': np.object_,
     'menopause': np.uint8, 
     'age': np.float32, 
     'n_positive_nodes': np.float32, 
@@ -316,10 +318,10 @@ def load_rgbsg(*, path="datasets/data/", return_X_y=False, as_frame=False):
             "load_rgbsg", data, target, feature_names, target_columns
         )
         #return data, target
-    data = data.astype(datatypes)
+        data = data.astype(datatypes)
     #data['horm_treatment'] = data['horm_treatment'].astype('category')
     #data['menopause'] = data['menopause'].astype('category')
-    data['grade'] = data['grade'].astype('category')
+        data['grade'] = data['grade'].astype('category')
     target = target.astype(np.float32)
     
     if return_X_y:

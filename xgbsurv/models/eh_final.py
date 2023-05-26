@@ -57,12 +57,11 @@ def integrated_kernel(a, b, bandwidth):
 # this will be final likelihood
 @jit(nopython=True, cache=True, fastmath=True)
 def eh_likelihood(
-    # y and linear predictor contain two cols
     y: np.array,
     linear_predictor: np.array,
     sample_weight: np.array = 1.0,
 ) -> np.array:
-    # XGBoost limitation
+    # XGBoost limitation, y and linear predictor contain two cols
     y = y.reshape(linear_predictor.shape)
     y1 = y[:, 0]
     # need two predictors here
@@ -86,31 +85,27 @@ def eh_likelihood(
         b=R_linear_predictor[event_mask],
         bandwidth=bandwidth,
     )
-    #print('integrated_kernel_matrix', integrated_kernel_matrix)
-    #print('(_, kernel_matrix, integrated_kernel_matrix,) ', (_, kernel_matrix, integrated_kernel_matrix,) )
+
     kernel_matrix = kernel_matrix[event_mask, :]
 
     inverse_sample_size: float = 1 / n_samples
 
     kernel_sum: np.array = kernel_matrix.sum(axis=0)
 
-    #print('(exp_linear_predictor_2 / exp_linear_predictor_1).repeat(torch.sum(event))',(exp_linear_predictor_2 / exp_linear_predictor_1)
-    #   .repeat(np.sum(event)))
-    #print('np.sum(event))',np.sum(event))
     integrated_kernel_sum: np.array = (
         integrated_kernel_matrix
         * (exp_linear_predictor_2 / exp_linear_predictor_1)
         .repeat(np.sum(event))
         .reshape(-1, np.sum(event))
     ).sum(axis=0)
-    #print('integrated_kernel_sum', integrated_kernel_sum)
+
     likelihood: np.array = inverse_sample_size * (
         linear_predictor_2[event_mask].sum()
         - R_linear_predictor[event_mask].sum()
         + np.log(inverse_sample_size_bandwidth * kernel_sum).sum()
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
-    #print('-likelihood',-likelihood)
+
     return -likelihood
 
 
@@ -583,7 +578,7 @@ def eh_objective(
     gradient = eh_gradient(y,linear_predictor).reshape(-1)
     #print('gradien eh shape',gradient.shape)
     #hessian = 
-    return gradient, 0.01*np.ones(gradient.shape[0])
+    return gradient, np.ones(gradient.shape[0])
 
 
 
@@ -641,13 +636,14 @@ def get_cumulative_hazard_function_eh(
     y_test,
     predictor_train,
     predictor_test,
-    granularity=10.0,
+    #granularity=10.0,
 ):
     time_test, event_test = transform_back(y_test[:,0])
     time: np.array = time_test #[:,0]
     time_train, event_train = transform_back(y_train[:,0])
     theta: np.array = np.exp(predictor_test)
     n_samples: int = predictor_test.shape[0]
+    granularity=np.min(np.diff(np.ravel(time))) - 1e-6
 
     zero_flag: bool = False
     if 0 not in time:
@@ -665,10 +661,13 @@ def get_cumulative_hazard_function_eh(
             predictor_train=predictor_train,
         )
 
+    # integration_times = np.arange(
+    #     start=np.round(np.min(theta[:, 0]) * np.min(time)),
+    #     stop=np.round(np.max(theta[:, 0]) * np.max(time)),
+    #     step=granularity,
+    # )
     integration_times = np.arange(
-        start=np.round(np.min(theta[:, 0]) * np.min(time)),
-        stop=np.round(np.max(theta[:, 0]) * np.max(time)),
-        step=granularity,
+        start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
     )
     integration_times = np.concatenate([[0], integration_times])
 

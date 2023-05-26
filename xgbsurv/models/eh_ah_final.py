@@ -402,10 +402,11 @@ def ah_objective(
         else:
             gradient[_] = gradient_three
             hessian[_] = hessian_five + hessian_six
-    return np.negative(gradient), 0.01*np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
+    # setting the hessian here to one does not seem to work.        
+    return np.negative(gradient), 0.1*np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
 
 
-#@jit(nopython=True, cache=True, fastmath=True)
+@jit(nopython=True, cache=True, fastmath=True)
 def baseline_hazard_estimator_ah(
     time,
     time_train,
@@ -433,10 +434,10 @@ def baseline_hazard_estimator_ah(
             numerator += gaussian_kernel(difference)
     numerator = inverse_bandwidth_sample_size * numerator
     denominator = inverse_sample_size * denominator
-    #print('numerator / denominator',numerator / denominator)
     return numerator / denominator
 
-
+# latest version
+# TODO: simplify inputs
 def get_cumulative_hazard_function_ah(
     X_train, 
     X_test, 
@@ -444,14 +445,15 @@ def get_cumulative_hazard_function_ah(
     y_test,
     predictor_train,
     predictor_test,
-    granularity=10.0,
+    #granularity=10.0,
     ):
     
     time_test, event_test = transform_back(y_test)
-    time: np.array = time_test
+    time: np.array = np.unique(time_test)
     time_train, event_train = transform_back(y_train)
     theta: np.array = np.exp(predictor_test)
     n_samples: int = predictor_test.shape[0]
+    granularity=np.min(np.diff(np.ravel(time))) - 1e-6
 
     zero_flag: bool = False
     if 0 not in time:
@@ -469,10 +471,13 @@ def get_cumulative_hazard_function_ah(
             predictor_train=predictor_train,
         )
     
+    # integration_times = np.arange(
+    #     start=np.round(np.min(theta) * np.min(time)),
+    #     stop=np.round(np.max(theta) * np.max(time)),
+    #     step=granularity,
+    # )
     integration_times = np.arange(
-        start=np.round(np.min(theta) * np.min(time)),
-        stop=np.round(np.max(theta) * np.max(time)),
-        step=granularity,
+        start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
     )
 
     integration_times = np.concatenate([[0], integration_times])
@@ -506,62 +511,3 @@ def get_cumulative_hazard_function_ah(
 
 
 
-
-
-
-
-# def ah_predict_cumulative_hazard_function(self, X, time):
-#     theta: np.array = np.exp(self.predict(X))
-#     n_samples: int = X.shape[0]
-
-#     zero_flag: bool = False
-#     if 0 not in time:
-#         zero_flag = True
-#         time = np.concatenate([np.array([0]), time])
-#         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
-#     else:
-#         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
-
-#     def hazard_function_integrate(s):
-#         return self.predict_baseline_hazard_function(s)
-
-#     for _ in range(n_samples):
-#         for ix, q in enumerate(time):
-#             if q == 0:
-#                 cumulative_hazard[_, ix] = 0.0
-#             else:
-#                 cumulative_hazard[_, ix] = (
-#                     quad(hazard_function_integrate, 0, q)[0] * theta[_]
-#                 )
-#     if zero_flag:
-#         cumulative_hazard = cumulative_hazard[:, 1:]
-#         time = time[1:]
-#     return pd.DataFrame(cumulative_hazard, columns=time)
-
-
-class AhPredictor:
-    """Prediction functions particular to the Cox PH model"""
-
-    def __init__(self) -> None:
-        self.uniq_times = None
-        self.cum_hazard_baseline = None
-        self.baseline_survival = None
-        # parts that D would recommend
-        self.train_linear_predictor = None
-        self.train_time = None
-        self.train_event = None
-
-    def fit(self, partial_hazard, y):
-        raise NotImplementedError(
-            "This model does not provide for the function you asked for!"
-        )
-
-    def get_cumulative_hazard_function(self):
-        raise NotImplementedError(
-            "This model does not provide for the function you asked for!"
-        )
-
-    def get_survival_function(self):
-        raise NotImplementedError(
-            "This model does not provide for the function you asked for!"
-        )

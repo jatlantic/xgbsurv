@@ -224,6 +224,8 @@ def efron_likelihood_torch(y: torch.Tensor, log_partial_hazard: torch.Tensor) ->
         )
     return -likelihood
 
+EPS: float = 2.220446049250313e-16
+
 class EfronLoss(_Loss):
     def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
         super().__init__(size_average, reduce, reduction)
@@ -231,7 +233,10 @@ class EfronLoss(_Loss):
 
     def forward(self, prediction, input):
         loss = efron_likelihood_torch(input, prediction)
-        return loss.to(torch.float32)
+        if isinstance(loss, int):
+            print(loss)
+            loss = torch.tensor(loss+EPS, dtype=torch.float32)
+        return loss #.to(torch.float32)
 
 # Deephit Loss - use adapted pycox loss
 
