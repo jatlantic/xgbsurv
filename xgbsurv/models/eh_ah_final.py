@@ -130,7 +130,7 @@ def ah_likelihood(
         + np.log(inverse_sample_size_bandwidth * kernel_sum).sum()
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
-    return -likelihood
+    return -likelihood*n_samples
 
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -403,7 +403,7 @@ def ah_objective(
             gradient[_] = gradient_three
             hessian[_] = hessian_five + hessian_six
     # setting the hessian here to one does not seem to work.        
-    return np.negative(gradient), 0.1*np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
+    return np.negative(gradient), np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
 
 
 @jit(nopython=True, cache=True, fastmath=True)
