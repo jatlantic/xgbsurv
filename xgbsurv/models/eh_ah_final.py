@@ -403,7 +403,7 @@ def ah_objective(
             gradient[_] = gradient_three
             hessian[_] = hessian_five + hessian_six
     # setting the hessian here to one does not seem to work.        
-    return np.negative(gradient), np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
+    return np.negative(gradient)* n_samples, np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
 
 
 @jit(nopython=True, cache=True, fastmath=True)

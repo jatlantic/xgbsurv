@@ -65,7 +65,7 @@ def aft_likelihood(
         + np.log(inverse_sample_size_bandwidth * kernel_sum).sum()
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
-    return -likelihood #*n_samples
+    return -likelihood*n_samples
 
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -339,7 +339,7 @@ def aft_objective(
             hessian[_] = hessian_five + hessian_six
     grad = np.negative(gradient)
     hess = modify_hessian(np.negative(hessian))
-    return grad, np.ones(grad.shape[0]) #hess
+    return grad*n_samples, np.ones(grad.shape[0]) #hess
 
 
 @jit(nopython=True, cache=True, fastmath=True)
