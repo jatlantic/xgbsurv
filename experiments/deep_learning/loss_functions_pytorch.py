@@ -638,7 +638,7 @@ def ah_likelihood_torch(
     bandwidth = None
 
 ) -> torch.Tensor:
-    
+
     if isinstance(linear_predictor, np.ndarray):
         linear_predictor = torch.from_numpy(linear_predictor)
     if isinstance(linear_predictor, pd.Series):
@@ -664,7 +664,8 @@ def ah_likelihood_torch(
     #     time * torch.exp(linear_predictor)
     # )
     R_linear_predictor: torch.tensor = torch.log(
-        time) + linear_predictor
+        time + torch.exp(linear_predictor))
+    # simplification of above leads to errors
     
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
     event_mask = event.bool()
@@ -684,9 +685,11 @@ def ah_likelihood_torch(
     #print('integrated kernel matrix', integrated_kernel_matrix)
     inverse_sample_size: float = 1 / n_samples
     kernel_sum = kernel_matrix.sum(axis=0)
+    
     integrated_kernel_sum = (
         sample_repeated_linear_predictor * integrated_kernel_matrix
     ).sum(axis=0)
+
     likelihood = inverse_sample_size * (
         -R_linear_predictor[event_mask].sum()
         + torch.log(inverse_sample_size_bandwidth * kernel_sum).sum()
@@ -701,8 +704,7 @@ class AHLoss(_Loss):
         self.bandwidth = bandwidth
 
     def forward(self, prediction, input): #add bandwidth and sample weight
-        #print('input forward', input)
-        #print('prediction forward', prediction)
+
         loss = ah_likelihood_torch(prediction, input, bandwidth=self.bandwidth)
         return loss
     
@@ -724,6 +726,208 @@ class AHLoss(_Loss):
 #         return loss
 
 # Cindex
+
+
+
+def risk_matrix_loop(time):
+    n_samples = time.shape[0]
+    risk_sum = n_samples
+    risk_set = torch.zeros_like(torch.unique(time))
+    idx=0
+    previous_time = time[0]
+    set_count = 0
+    for k in range(n_samples):
+        current_time = time[k]
+        if current_time > previous_time:
+
+            risk_set[idx] = risk_sum
+            risk_sum -= set_count
+            set_count = 0
+            idx+=1
+        set_count += 1
+        previous_time = current_time
+    risk_set[idx] = set_count
+    return risk_set
+
+def KaplanMeier_torch(time: np.array, event: np.array, 
+                cens_dist: bool = False
+) -> tuple[np.array, np.array] | tuple[np.array, np.array, np.array]:
+    """_summary_
+
+    Parameters
+    ----------
+    time : npt.NDArray[float]
+        _description_
+    event : npt.NDArray[int]
+        _description_
+    cens_dist : bool, optional
+        _description_, by default False
+
+    Returns
+    -------
+    tuple[npt.NDArray[float], npt.NDArray[float]] | tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[int]]
+        _description_
+    
+    References
+    ----------
+    .. [1] Kaplan, E. L. and Meier, P., "Nonparametric estimation from incomplete observations",
+           Journal of The American Statistical Association, vol. 53, pp. 457-481, 1958.
+    .. [2] S. Pölsterl, “scikit-survival: A Library for Time-to-Event Analysis Built on Top of scikit-learn,”
+           Journal of Machine Learning Research, vol. 21, no. 212, pp. 1–6, 2020.
+    """
+    # similar approach to sksurv, but no loops
+    # even and censored is other way round in sksurv ->clarify
+    #time, event = transform_back(y)
+    # order, remove later
+    #is_sorted = lambda a: np.all(a[:-1] <= a[1:])
+    
+    # if is_sorted(time) == False:
+    #     order = np.argsort(time, kind="mergesort")
+    #     time = time[order]
+    #     event = event[order]
+    
+    times = torch.unique(time)
+    #idx = np.digitize(time, np.unique(time))
+    # numpy diff nth discrete difference over index, add 1 at the beginning
+    #breaks = np.flatnonzero(np.concatenate(([1], np.diff(idx))))
+
+    # flatnonzero return indices that are nonzero in flattened version
+    #n_events = np.add.reduceat(event, breaks, axis=0)
+    unique_times, inverse_indices = time.unique(return_inverse=True)
+
+    # Prepare a tensor for the event counts
+    event_counts = torch.zeros_like(unique_times)
+
+    # Add up the events for each unique time using scatter_add_
+    event_counts.scatter_add_(0, inverse_indices, event)
+    n_events = event_counts
+    #n_at_risk = risk_matrix_loop(time)
+    n_at_risk = torch.unique((torch.outer(time,time)>=np.square(time)).int().T, dim=0).sum(axis=1).flip(0)
+    n_at_risk = n_at_risk.float()
+    n_events = n_events.float()
+    # censoring distribution for ipcw estimation
+    #n_censored a vector, with 1 at censoring position, zero elsewhere
+    if cens_dist:
+        n_at_risk -= n_events
+        # for each unique time step how many observations are censored
+        censored = 1-event
+        n_censored = torch.zeros_like(unique_times)
+        #n_censored = np.add.reduceat(censored, breaks, axis=0)
+        n_censored.scatter_add_(0, inverse_indices, censored)
+        mask = (n_censored != 0)
+        c = torch.zeros_like(times)
+        # apply the division operation only where mask is True
+        c[mask] = n_censored[mask] / n_at_risk[mask] 
+        vals = 1-c
+        estimates = torch.cumprod(vals, dim=0)
+        return times, estimates, n_censored
+
+
+    else:
+        mask = (n_events != 0)
+        vals = 1-torch.divide(
+        n_events[mask], n_at_risk[mask],
+        #rounding_mode=None,
+        out=torch.zeros(times.shape[0]),
+        #where=mask,
+        )
+        print(vals)
+        estimates = torch.cumprod(vals, dim=0)
+        return times, estimates
+    
+
+def ipcw_estimate_torch(time: np.array, event: np.array) -> tuple[np.array, np.array]:
+
+    unique_time, cens_dist, n_censored = KaplanMeier_torch(time, event, cens_dist=True) 
+    #print(cens_dist)
+    # similar approach to sksurv
+    idx = torch.searchsorted(unique_time, time)
+    est = 1.0/cens_dist[idx] # improve as divide by zero
+    est[n_censored[idx]!=0] = 0
+    # in R mboost there is a maxweight of 5
+    est[est>5] = 5
+    return unique_time, est
+
+
+def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
+    """_summary_
+
+    Parameters
+    ----------
+    y : npt.NDArray[float]
+        Sorted array containing survival time and event where negative value is taken as censored event.
+    approach : str, optional
+        Choose mboost implementation or paper implementation of c-boosting, by default 'paper'.
+
+    Returns
+    -------
+    npt.NDArray[float]
+        Array of weights.
+
+    References
+    ----------
+    .. [1] 1. Mayr, A. & Schmid, M. Boosting the concordance index for survival data–a unified framework to derive and evaluate biomarker combinations. 
+       PloS one 9, e84483 (2014).
+
+    """
+    time, event = transform_back_torch(y) 
+    print('time shape', time.shape)
+    print('event shape', event.shape)
+    n = event.shape[0]
+
+    _, ipcw_new = ipcw_estimate_torch(time, event)
+
+    ipcw = ipcw_new #ipcw_old consider copy
+    survtime = time
+
+    fill = torch.square(ipcw)
+    wweights = fill.repeat(n,1).T
+    # wweights = torch.full((n,n), np.square(ipcw)).T # good here
+
+    # weightsj = torch.full((n,n), survtime).T
+    weightsj = survtime.repeat(n,1).T
+    # weightsk = torch.full((n,n), survtime) #byrow = TRUE in R, in np automatic no T required
+    weightsk = survtime.repeat(n,1)
+    
+    if approach == 'mboost':
+        # implementing   weightsI <- ifelse(weightsj == weightsk, .5, (weightsj < weightsk) + 0) - diag(.5, n,n)
+        # from mboost github repo
+        weightsI = torch.empty((n,n))
+        weightsI[weightsj == weightsk] = 0.5
+        weightsI = (weightsj < weightsk).astype(int)
+        weightsI = weightsI - torch.diag(0.5*np.ones(n))
+    if approach == 'paper':
+        weightsI = (weightsj < weightsk).int()
+
+    wweights = wweights * weightsI 
+    
+    wweights = wweights / torch.sum(wweights)
+
+    return wweights
+
+
+def cind_likelihood_torch(predictor: np.array,y: np.array, sigma: np.array = 0.1) -> np.array:
+    # f corresponds to predictor in paper
+    time, _ = transform_back_torch(y)
+    n = time.shape[0]
+    #etaj = np.full((n,n), predictor)
+    etaj = predictor.repeat(n,1) 
+    #etak = np.full((n,n), predictor).T
+    etak = predictor.repeat(n,1).T
+    x = (etak - etaj) 
+    weights_out = compute_weights_torch(y)
+    c_loss = 1/(1+torch.exp(x/sigma))*weights_out
+    return -torch.sum(c_loss)
+
+
+class CindLoss(_Loss):
+    def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
+        super().__init__(size_average, reduce, reduction)
+        # Initialize any additional variables you need for your custom loss function here.
+
+    def forward(self, prediction, input): 
+        loss = cind_likelihood_torch(prediction, input)
+        return loss
 
 # TODO: Write in Pytorch, especially equivalent for add.reduceat()
 

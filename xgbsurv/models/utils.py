@@ -95,14 +95,35 @@ def sort_X_y_pandas(X, y):
         X = X.reindex(order)
         y = y.reindex(order)
     return X, y
-    
+
+
+@jit(nopython=True, cache=True)
+def risk_matrix_loop_numba(time):
+    n_samples = time.shape[0]
+    risk_sum = n_samples
+    risk_set = np.zeros_like(np.unique(time))
+    idx=0
+    previous_time = time[0]
+    set_count = 0
+    for k in range(n_samples):
+        current_time = time[k]
+        if current_time > previous_time:
+
+            risk_set[idx] = risk_sum
+            risk_sum -= set_count
+            set_count = 0
+            idx+=1
+        set_count += 1
+        previous_time = current_time
+    risk_set[idx] = set_count
+    return risk_set
 
 
 
 # change to small letter in the end to keep convention
-def KaplanMeier(time: npt.NDArray[float], event: npt.NDArray[int], 
+def KaplanMeier(time: np.array, event: np.array, 
                 cens_dist: bool = False
-) -> tuple[npt.NDArray[float], npt.NDArray[float]] | tuple[npt.NDArray[float], npt.NDArray[float], npt.NDArray[int]]:
+) -> tuple[np.array, np.array] | tuple[np.array, np.array, np.array]:
     """_summary_
 
     Parameters
@@ -144,8 +165,9 @@ def KaplanMeier(time: npt.NDArray[float], event: npt.NDArray[int],
 
     # flatnonzero return indices that are nonzero in flattened version
     n_events = np.add.reduceat(event, breaks, axis=0)
-    n_at_risk = np.sum(np.unique((np.outer(time,time)>=np.square(time)).astype(int).T,axis=0),axis=1)[::-1]
+    #n_at_risk = np.sum(np.unique((np.outer(time,time)>=np.square(time)).astype(int).T,axis=0),axis=1)[::-1]
     
+    n_at_risk = risk_matrix_loop_numba(time)
     # censoring distribution for ipcw estimation
     #n_censored a vector, with 1 at censoring position, zero elsewhere
     if cens_dist:
@@ -172,7 +194,7 @@ def KaplanMeier(time: npt.NDArray[float], event: npt.NDArray[int],
         estimates = np.cumprod(vals)
         return times, estimates
 
-def ipcw_estimate(time: npt.NDArray[float], event: npt.NDArray[int]) -> tuple[npt.NDArray[float], npt.NDArray[float]]:
+def ipcw_estimate(time: np.array, event: np.array) -> tuple[np.array, np.array]:
     """IPCW
 
     Parameters

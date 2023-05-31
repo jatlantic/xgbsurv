@@ -71,11 +71,7 @@ def difference_kernels(a, b, bandwidth):
     return difference, kernel_matrix, integrated_kernel_matrix
 
 
-@jit(nopython=True, cache=True, fastmath=True)
-def modify_hessian(hessian: np.array):
-    if np.any(hessian < 0):
-        hessian[hessian < 0] = np.mean(hessian[hessian > 0])
-    return hessian
+
 
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -97,6 +93,7 @@ def ah_likelihood(
     """
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
+    n_events = np.sum(event)
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     linear_predictor: np.array = linear_predictor
     # attention wrt. -exp
@@ -120,7 +117,7 @@ def ah_likelihood(
     inverse_sample_size: float = 1 / n_samples
 
     kernel_sum: np.array = kernel_matrix.sum(axis=0)
-    #print('integrated kernel matrix', integrated_kernel_matrix)
+
     integrated_kernel_sum: np.array = (
         integrated_kernel_matrix
         * exp_linear_predictor.repeat(np.sum(event)).reshape(-1, np.sum(event))
@@ -130,7 +127,7 @@ def ah_likelihood(
         + np.log(inverse_sample_size_bandwidth * kernel_sum).sum()
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
-    return -likelihood*n_samples
+    return -likelihood*n_events # *n_samples
 
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -176,9 +173,7 @@ def ah_objective(
         a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
     )
 
-    squared_difference_outer_product: np.array = np.square(
-        difference_outer_product
-    )
+
 
     sample_repeated_linear_predictor: np.array = (
         linear_predictor_vanilla.repeat(n_events).reshape(
@@ -189,19 +184,12 @@ def ah_objective(
     kernel_numerator_full: np.array = (
         kernel_matrix * difference_outer_product * inverse_bandwidth
     )
-    squared_kernel_numerator: np.array = np.square(
-        kernel_numerator_full[event_mask, :]
-    )
 
-    squared_difference_kernel_numerator: np.array = kernel_matrix[
-        event_mask, :
-    ] * (
-        squared_difference_outer_product[event_mask, :]
-        * squared_inverse_bandwidth
-    )
+
+
 
     kernel_denominator: np.array = kernel_matrix[event_mask, :].sum(axis=0)
-    squared_kernel_denominator: np.array = np.square(kernel_denominator)
+    #squared_kernel_denominator: np.array = np.square(kernel_denominator)
 
     integrated_kernel_denominator: np.array = (
         integrated_kernel_matrix * sample_repeated_linear_predictor
@@ -223,38 +211,6 @@ def ah_objective(
             ).sum()
         )
 
-        hessian_five = inverse_sample_size * (
-            (
-                np.square(
-                    (
-                        linear_predictor_vanilla[_]
-                        * integrated_kernel_matrix[_, :]
-                        + linear_predictor_vanilla[_]
-                        * kernel_matrix[_, :]
-                        * inverse_bandwidth
-                    )
-                    / integrated_kernel_denominator
-                )
-            ).sum()
-        )
-        hessian_six = -(
-            inverse_sample_size
-            * (
-                (
-                    linear_predictor_vanilla[_]
-                    * integrated_kernel_matrix[_, :]
-                    + 2
-                    * linear_predictor_vanilla[_]
-                    * kernel_matrix[_, :]
-                    * inverse_bandwidth
-                    - linear_predictor_vanilla[_]
-                    * kernel_numerator_full[_, :]
-                    * inverse_bandwidth
-                )
-                / integrated_kernel_denominator
-            ).sum()
-        )
-
         if sample_event:
             gradient_correction_factor = inverse_sample_size * (
                 (
@@ -266,28 +222,7 @@ def ah_objective(
                 / integrated_kernel_denominator[event_count]
             )
 
-            hessian_correction_factor = -inverse_sample_size * (
-                (
-                    (
-                        linear_predictor_vanilla[_] * zero_integrated_kernel
-                        + linear_predictor_vanilla[_]
-                        * zero_kernel
-                        * inverse_bandwidth
-                    )
-                    / integrated_kernel_denominator[event_count]
-                )
-                ** 2
-                - (
-                    (
-                        linear_predictor_vanilla[_] * zero_integrated_kernel
-                        + 2
-                        * linear_predictor_vanilla[_]
-                        * zero_kernel
-                        * inverse_bandwidth
-                    )
-                    / (integrated_kernel_denominator[event_count])
-                )
-            )
+
 
             gradient_one = -(
                 inverse_sample_size
@@ -298,60 +233,14 @@ def ah_objective(
                     / kernel_denominator
                 ).sum()
             )
-            hessian_one = -(
-                inverse_sample_size
-                * (
-                    squared_kernel_numerator[
-                        event_count,
-                    ]
-                    / squared_kernel_denominator
-                ).sum()
-            )
-
-            hessian_two = inverse_sample_size * (
-                (
-                    (
-                        squared_difference_kernel_numerator[event_count, :]
-                        - (
-                            kernel_matrix[
-                                _,
-                            ]
-                            * squared_inverse_bandwidth
-                        )
-                    )
-                    / kernel_denominator
-                ).sum()
-                + (
-                    zero_kernel
-                    * squared_inverse_bandwidth
-                    / kernel_denominator[event_count]
-                )
-            )
 
             prefactor: float = kernel_numerator_full[
                 event_mask, event_count
             ].sum() / (kernel_denominator[event_count])
 
             gradient_two = inverse_sample_size * prefactor
-            hessian_three = -inverse_sample_size * (prefactor**2)
 
-            hessian_four = inverse_sample_size * (
-                (
-                    (
-                        (
-                            squared_difference_kernel_numerator[:, event_count]
-                        ).sum()
-                    )
-                    - (
-                        squared_inverse_bandwidth
-                        * (
-                            (kernel_matrix[event_mask, event_count]).sum()
-                            - zero_kernel
-                        )
-                    )
-                )
-                / (kernel_denominator[event_count])
-            )
+
             prefactor = (
                 (
                     (
@@ -365,18 +254,6 @@ def ah_objective(
             ) / integrated_kernel_denominator[event_count]
             gradient_four = inverse_sample_size * prefactor
 
-            hessian_seven = inverse_sample_size * (prefactor**2)
-            hessian_eight = inverse_sample_size * (
-                (
-                    (
-                        linear_predictor_vanilla
-                        * kernel_numerator_full[:, event_count]
-                        * inverse_bandwidth
-                    ).sum()
-                    - linear_predictor_vanilla[_] * zero_integrated_kernel
-                )
-                / integrated_kernel_denominator[event_count]
-            )
 
             gradient[_] = (
                 gradient_one
@@ -386,24 +263,12 @@ def ah_objective(
                 + gradient_correction_factor
             ) - inverse_sample_size
 
-            hessian[_] = (
-                hessian_one
-                + hessian_two
-                + hessian_three
-                + hessian_four
-                + hessian_five
-                + hessian_six
-                + hessian_seven
-                + hessian_eight
-                + hessian_correction_factor
-            )
             event_count += 1
 
         else:
             gradient[_] = gradient_three
-            hessian[_] = hessian_five + hessian_six
-    # setting the hessian here to one does not seem to work.        
-    return np.negative(gradient)* n_samples, np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))
+     
+    return np.negative(gradient)*n_events, np.ones(gradient.shape[0])
 
 
 @jit(nopython=True, cache=True, fastmath=True)
@@ -447,13 +312,14 @@ def get_cumulative_hazard_function_ah(
     predictor_test,
     #granularity=10.0,
     ):
-    
     time_test, event_test = transform_back(y_test)
     time: np.array = np.unique(time_test)
     time_train, event_train = transform_back(y_train)
     theta: np.array = np.exp(predictor_test)
+    theta_min: np.array = np.exp(np.negative(predictor_test))
     n_samples: int = predictor_test.shape[0]
-    granularity=np.min(np.diff(np.ravel(time))) - 1e-6
+    granularity=(np.min(np.diff(np.ravel(np.unique(time)))) - 1e-6)
+    print('granularity', granularity)
 
     zero_flag: bool = False
     if 0 not in time:
@@ -481,8 +347,8 @@ def get_cumulative_hazard_function_ah(
     )
 
     integration_times = np.concatenate([[0], integration_times])
-
     integration_values = np.zeros(integration_times.shape[0])
+    print('integration times',integration_values.shape[0])
     for _ in range(1, integration_values.shape[0]):
         integration_values[_] = (
             integration_values[_ - 1]
@@ -502,7 +368,7 @@ def get_cumulative_hazard_function_ah(
                 )
                 - 1
             ]
-            / theta[_]
+            * theta_min[_]
         )
     if zero_flag:
         cumulative_hazard = cumulative_hazard[:, 1:]
@@ -511,3 +377,283 @@ def get_cumulative_hazard_function_ah(
 
 
 
+# formulation with hessian
+
+
+# @jit(nopython=True, cache=True, fastmath=True)
+# def modify_hessian(hessian: np.array):
+#     if np.any(hessian < 0):
+#         hessian[hessian < 0] = np.mean(hessian[hessian > 0])
+#     return hessian
+
+# @jit(nopython=True, cache=True, fastmath=True)
+# def ah_objective(
+#     y: np.array,
+#     linear_predictor: np.array
+# ) -> Tuple[np.array, np.array]:
+#     """Gradient of the Accelerated Hazards model in numba-compatible form.
+
+#     Args:
+#         time (np.array): Array containing event/censoring times of shape = (n_samples,).
+#         event (np.array): Array containing binary event indicators of shape = (n_samples,).
+#         linear_predictor (np.array): Linear predictor of risk: `X @ coef`. Shape = (n_samples,).
+#         bandwidth_function (str, optional): _description_. Defaults to "jones_1990".
+#         hessian_modification_strategy (str, optional): _description_. Defaults to "flip".
+
+#     Returns:
+#         Tuple[np.array, np.array]: Tuple containing the negative gradients and the hessian
+#             of with the linear predictor.
+#     """
+#     time, event = transform_back(y)
+#     n_samples: int = time.shape[0]
+#     bandwidth = 1.30 * math.pow(n_samples, -0.2)
+#     linear_predictor_vanilla: np.array = np.exp(-linear_predictor)
+#     linear_predictor = np.log(time * np.exp(linear_predictor))
+#     n_events: int = np.sum(event)
+#     gradient: np.array = np.empty(n_samples)
+#     hessian: np.array = np.empty(n_samples)
+#     event_mask: np.array = event.astype(np.bool_)
+#     inverse_sample_size: float = 1 / n_samples
+#     inverse_bandwidth: float = 1 / bandwidth
+#     squared_inverse_bandwidth: float = inverse_bandwidth**2
+
+#     zero_kernel: float = PDF_PREFACTOR
+#     zero_integrated_kernel: float = CDF_ZERO
+#     event_count: int = 0
+
+#     (
+#         difference_outer_product,
+#         kernel_matrix,
+#         integrated_kernel_matrix,
+#     ) = difference_kernels(
+#         a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
+#     )
+
+#     squared_difference_outer_product: np.array = np.square(
+#         difference_outer_product
+#     )
+
+#     sample_repeated_linear_predictor: np.array = (
+#         linear_predictor_vanilla.repeat(n_events).reshape(
+#             (n_samples, n_events)
+#         )
+#     )
+
+#     kernel_numerator_full: np.array = (
+#         kernel_matrix * difference_outer_product * inverse_bandwidth
+#     )
+#     squared_kernel_numerator: np.array = np.square(
+#         kernel_numerator_full[event_mask, :]
+#     )
+
+#     squared_difference_kernel_numerator: np.array = kernel_matrix[
+#         event_mask, :
+#     ] * (
+#         squared_difference_outer_product[event_mask, :]
+#         * squared_inverse_bandwidth
+#     )
+
+#     kernel_denominator: np.array = kernel_matrix[event_mask, :].sum(axis=0)
+#     squared_kernel_denominator: np.array = np.square(kernel_denominator)
+
+#     integrated_kernel_denominator: np.array = (
+#         integrated_kernel_matrix * sample_repeated_linear_predictor
+#     ).sum(axis=0)
+
+#     for _ in range(n_samples):
+#         sample_event: int = event[_]
+#         gradient_three = -(
+#             inverse_sample_size
+#             * (
+#                 (
+#                     -linear_predictor_vanilla[_]
+#                     * integrated_kernel_matrix[_, :]
+#                     + linear_predictor_vanilla[_]
+#                     * kernel_matrix[_, :]
+#                     * inverse_bandwidth
+#                 )
+#                 / integrated_kernel_denominator
+#             ).sum()
+#         )
+
+#         hessian_five = inverse_sample_size * (
+#             (
+#                 np.square(
+#                     (
+#                         linear_predictor_vanilla[_]
+#                         * integrated_kernel_matrix[_, :]
+#                         + linear_predictor_vanilla[_]
+#                         * kernel_matrix[_, :]
+#                         * inverse_bandwidth
+#                     )
+#                     / integrated_kernel_denominator
+#                 )
+#             ).sum()
+#         )
+#         hessian_six = -(
+#             inverse_sample_size
+#             * (
+#                 (
+#                     linear_predictor_vanilla[_]
+#                     * integrated_kernel_matrix[_, :]
+#                     + 2
+#                     * linear_predictor_vanilla[_]
+#                     * kernel_matrix[_, :]
+#                     * inverse_bandwidth
+#                     - linear_predictor_vanilla[_]
+#                     * kernel_numerator_full[_, :]
+#                     * inverse_bandwidth
+#                 )
+#                 / integrated_kernel_denominator
+#             ).sum()
+#         )
+
+#         if sample_event:
+#             gradient_correction_factor = inverse_sample_size * (
+#                 (
+#                     linear_predictor_vanilla[_] * zero_integrated_kernel
+#                     + linear_predictor_vanilla[_]
+#                     * zero_kernel
+#                     * inverse_bandwidth
+#                 )
+#                 / integrated_kernel_denominator[event_count]
+#             )
+
+#             hessian_correction_factor = -inverse_sample_size * (
+#                 (
+#                     (
+#                         linear_predictor_vanilla[_] * zero_integrated_kernel
+#                         + linear_predictor_vanilla[_]
+#                         * zero_kernel
+#                         * inverse_bandwidth
+#                     )
+#                     / integrated_kernel_denominator[event_count]
+#                 )
+#                 ** 2
+#                 - (
+#                     (
+#                         linear_predictor_vanilla[_] * zero_integrated_kernel
+#                         + 2
+#                         * linear_predictor_vanilla[_]
+#                         * zero_kernel
+#                         * inverse_bandwidth
+#                     )
+#                     / (integrated_kernel_denominator[event_count])
+#                 )
+#             )
+
+#             gradient_one = -(
+#                 inverse_sample_size
+#                 * (
+#                     kernel_numerator_full[
+#                         _,
+#                     ]
+#                     / kernel_denominator
+#                 ).sum()
+#             )
+#             hessian_one = -(
+#                 inverse_sample_size
+#                 * (
+#                     squared_kernel_numerator[
+#                         event_count,
+#                     ]
+#                     / squared_kernel_denominator
+#                 ).sum()
+#             )
+
+#             hessian_two = inverse_sample_size * (
+#                 (
+#                     (
+#                         squared_difference_kernel_numerator[event_count, :]
+#                         - (
+#                             kernel_matrix[
+#                                 _,
+#                             ]
+#                             * squared_inverse_bandwidth
+#                         )
+#                     )
+#                     / kernel_denominator
+#                 ).sum()
+#                 + (
+#                     zero_kernel
+#                     * squared_inverse_bandwidth
+#                     / kernel_denominator[event_count]
+#                 )
+#             )
+
+#             prefactor: float = kernel_numerator_full[
+#                 event_mask, event_count
+#             ].sum() / (kernel_denominator[event_count])
+
+#             gradient_two = inverse_sample_size * prefactor
+#             hessian_three = -inverse_sample_size * (prefactor**2)
+
+#             hessian_four = inverse_sample_size * (
+#                 (
+#                     (
+#                         (
+#                             squared_difference_kernel_numerator[:, event_count]
+#                         ).sum()
+#                     )
+#                     - (
+#                         squared_inverse_bandwidth
+#                         * (
+#                             (kernel_matrix[event_mask, event_count]).sum()
+#                             - zero_kernel
+#                         )
+#                     )
+#                 )
+#                 / (kernel_denominator[event_count])
+#             )
+#             prefactor = (
+#                 (
+#                     (
+#                         linear_predictor_vanilla
+#                         * kernel_matrix[:, event_count]
+#                     ).sum()
+#                     - linear_predictor_vanilla[_] * zero_kernel
+#                 )
+#                 * inverse_bandwidth
+#                 - (linear_predictor_vanilla[_] * zero_integrated_kernel)
+#             ) / integrated_kernel_denominator[event_count]
+#             gradient_four = inverse_sample_size * prefactor
+
+#             hessian_seven = inverse_sample_size * (prefactor**2)
+#             hessian_eight = inverse_sample_size * (
+#                 (
+#                     (
+#                         linear_predictor_vanilla
+#                         * kernel_numerator_full[:, event_count]
+#                         * inverse_bandwidth
+#                     ).sum()
+#                     - linear_predictor_vanilla[_] * zero_integrated_kernel
+#                 )
+#                 / integrated_kernel_denominator[event_count]
+#             )
+
+#             gradient[_] = (
+#                 gradient_one
+#                 + gradient_two
+#                 + gradient_three
+#                 + gradient_four
+#                 + gradient_correction_factor
+#             ) - inverse_sample_size
+
+#             hessian[_] = (
+#                 hessian_one
+#                 + hessian_two
+#                 + hessian_three
+#                 + hessian_four
+#                 + hessian_five
+#                 + hessian_six
+#                 + hessian_seven
+#                 + hessian_eight
+#                 + hessian_correction_factor
+#             )
+#             event_count += 1
+
+#         else:
+#             gradient[_] = gradient_three
+#             hessian[_] = hessian_five + hessian_six
+#     # setting the hessian here to one does not seem to work.        
+#     return np.negative(gradient)* n_samples, np.ones(gradient.shape[0]) #modify_hessian(hessian=np.negative(hessian))

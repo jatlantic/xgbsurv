@@ -1,0 +1,1 @@
+from xgbsurv.docstrings import xgbsurv_docstrings

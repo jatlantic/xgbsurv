@@ -81,18 +81,20 @@ def cind_loss(y: npt.NDArray[float], predictor: npt.NDArray[float], sigma: npt.N
        PloS one 9, e84483 (2014).
     """
     # f corresponds to predictor in paper
-    time, _ = transform_back(y)
+    time, event = transform_back(y)
     n = time.shape[0]
+    n_events = np.sum(event)
     etaj = np.full((n,n), predictor)
     etak = np.full((n,n), predictor).T
     x = (etak - etaj) 
     weights_out = compute_weights(y)
     c_loss = 1/(1+np.exp(x/sigma))*weights_out
-    return -np.sum(c_loss) #/y.shape[0] # compared with R funciton - looks good
+    return -np.sum(c_loss)*n_events #/y.shape[0] # compared with R funciton - looks good
 
 def cind_gradient(y, predictor, weights, sigma=0.1):
 
     time, event = transform_back(y)
+    n_events = np.sum(event)
     n = time.shape[0]
     etaj = np.full((n,n), predictor) # looks good
     etak = np.full((n,n), predictor).T # looks good
@@ -100,10 +102,11 @@ def cind_gradient(y, predictor, weights, sigma=0.1):
     weights_out = weights #compute_weights(time, event)
     M1 = np.exp(x/sigma)/(sigma *np.square((1+np.exp(x/sigma))))*weights_out #verify squared, reckon elementwise
     cind_grad = np.sum(M1,axis=0) - np.sum(M1, axis=1)
-    return -cind_grad # beware of negative sign
+    return -cind_grad*n_events # beware of negative sign
 
 def cind_hessian(y, predictor, weights, sigma=0.1):
     time, event = transform_back(y)
+    n_events = np.sum(event)
     #print(time)
     n = time.shape[0]
     etaj = np.full((n,n), predictor)
@@ -123,9 +126,9 @@ def cind_hessian(y, predictor, weights, sigma=0.1):
     #np.fill_diagonal(r,1)
     # in xgboost hessian is diagonal vector hessian matrix
     # r = np.ones(n)
-    return -c_hessian #r #
+    return -c_hessian*n_events #r #
 
-def cind_objective(y: npt.NDArray[float], predictor: npt.NDArray[float]) -> tuple[npt.NDArray[float], npt.NDArray[float]]:
+def cind_objective(y: np.array, predictor: np.array) -> tuple[np.array, np.array]:
     """Objective function calculating gradient and hessian of C-boosting negative likelihood function. Assumes data is sorted.
 
     Parameters

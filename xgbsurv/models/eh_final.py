@@ -71,6 +71,7 @@ def eh_likelihood(
     exp_linear_predictor_2 = np.exp(linear_predictor_2)
     time, event = transform_back(y1)
     n_samples: int = time.shape[0]
+    n_events: int = np.sum(event)
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     R_linear_predictor: np.array = np.log(time * exp_linear_predictor_1)
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
@@ -106,7 +107,7 @@ def eh_likelihood(
         - np.log(inverse_sample_size * integrated_kernel_sum).sum()
     )
 
-    return -likelihood
+    return -likelihood*n_events
 
 
 
@@ -195,6 +196,7 @@ def eh_gradient(
     y1 = y[:, 0]
     time, event = transform_back(y1)
     n_samples: int = time.shape[0]
+    n_events: int = np.sum(event)
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     linear_predictor_1: np.array = np.exp(linear_predictor[:, 0] * sample_weight)
     linear_predictor_2: np.array = np.exp(linear_predictor[:, 1] * sample_weight)
@@ -202,7 +204,7 @@ def eh_gradient(
     linear_predictor_vanilla: np.array = linear_predictor_2 / linear_predictor_1
     # call this R for consistency with formula
     #linear_predictor = np.log(time * linear_predictor_1)
-    n_events: int = np.sum(event)
+
     gradient_1: np.array = np.empty(n_samples)
     gradient_2: np.array = np.empty(n_samples)
     event_mask: np.array = event.astype(np.bool_)
@@ -332,7 +334,7 @@ def eh_gradient(
             gradient_1[_] = gradient_three
             gradient_2[_] = gradient_five
     
-    return np.stack((np.negative(gradient_1),np.negative(gradient_2)), axis=1)
+    return np.stack((np.negative(gradient_1),np.negative(gradient_2)), axis=1)*n_events
 
 
 #@jit(nopython=True, cache=True, fastmath=True)
@@ -638,13 +640,18 @@ def get_cumulative_hazard_function_eh(
     predictor_test,
     #granularity=10.0,
 ):
+    print('predictor_train',predictor_train)
+    print('predictor_test',predictor_test)
     time_test, event_test = transform_back(y_test[:,0])
+    test_ix = np.argsort(time_test)
+    time_test = time_test[test_ix]
+    event_test = event_test[test_ix]
+    predictor_test = predictor_test[test_ix]
     time: np.array = time_test #[:,0]
     time_train, event_train = transform_back(y_train[:,0])
     theta: np.array = np.exp(predictor_test)
     n_samples: int = predictor_test.shape[0]
-    granularity=np.min(np.diff(np.ravel(time))) - 1e-6
-
+    granularity=np.min(np.diff(np.ravel(np.unique(time)))) - 1e-6
     zero_flag: bool = False
     if 0 not in time:
         zero_flag = True
@@ -669,10 +676,15 @@ def get_cumulative_hazard_function_eh(
     integration_times = np.arange(
         start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
     )
+    print(np.round(np.max(theta) * np.max(time)) + 0.01)
+    print(time)
+    print(granularity)
+    print(integration_times)
     integration_times = np.concatenate([[0], integration_times])
-
     integration_values = np.zeros(integration_times.shape[0])
     for _ in range(1, integration_values.shape[0]):
+        print(_)
+        
         integration_values[_] = (
             integration_values[_ - 1]
             + quadrature(
@@ -682,6 +694,7 @@ def get_cumulative_hazard_function_eh(
                 vec_func=False,
             )[0]
         )
+        print(integration_values[_])
 
     for _ in range(n_samples):
         cumulative_hazard[_] = (

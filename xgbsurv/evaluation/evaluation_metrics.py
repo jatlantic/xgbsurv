@@ -5,6 +5,7 @@ import numpy as np
 
 
 def cindex_censored(target, estimate):
+    """Wrapper for sksurv condcordance index. Input order: true values, prediction."""
     event_time, event_indicator = transform_back(target)
     cindex = concordance_index_censored(event_indicator.astype('bool'), event_time, estimate)[0]
     return cindex
