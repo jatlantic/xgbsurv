@@ -664,7 +664,7 @@ def ah_likelihood_torch(
     #     time * torch.exp(linear_predictor)
     # )
     R_linear_predictor: torch.tensor = torch.log(
-        time + torch.exp(linear_predictor))
+        time * torch.exp(linear_predictor))
     # simplification of above leads to errors
     
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
