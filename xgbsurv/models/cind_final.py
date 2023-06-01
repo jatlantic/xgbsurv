@@ -89,7 +89,7 @@ def cind_loss(y: npt.NDArray[float], predictor: npt.NDArray[float], sigma: npt.N
     x = (etak - etaj) 
     weights_out = compute_weights(y)
     c_loss = 1/(1+np.exp(x/sigma))*weights_out
-    return -np.sum(c_loss)*n_events #/y.shape[0] # compared with R funciton - looks good
+    return np.sum(c_loss)*n_events #/y.shape[0] # compared with R funciton - looks good
 
 def cind_gradient(y, predictor, weights, sigma=0.1):
 
