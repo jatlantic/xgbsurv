@@ -349,7 +349,7 @@ def get_cumulative_hazard_function_ah(
     )
     integration_times = np.unique((np.ravel(integration_times)))
 
-    integration_times = np.concatenate([[0], integration_times])
+    integration_times = np.concatenate([[0], integration_times, [np.max(integration_times) + 0.01]])
 
     integration_values = np.zeros(integration_times.shape[0])
     for _ in range(1, integration_values.shape[0]):
