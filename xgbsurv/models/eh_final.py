@@ -625,7 +625,10 @@ def baseline_hazard_estimator_eh(
     numerator = inverse_bandwidth_sample_size * numerator
     denominator = inverse_sample_size * denominator
 
-    return numerator / denominator
+    if denominator <= 0.0:
+        return 0.0
+    else:
+        return numerator / denominator
 
 
 def get_cumulative_hazard_function_eh(
