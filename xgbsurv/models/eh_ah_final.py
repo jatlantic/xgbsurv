@@ -313,16 +313,12 @@ def get_cumulative_hazard_function_ah(
     y_test,
     predictor_train,
     predictor_test,
-    #granularity=10.0,
-    ):
+):
     time_test, event_test = transform_back(y_test)
     time: np.array = np.unique(time_test)
     time_train, event_train = transform_back(y_train)
     theta: np.array = np.exp(predictor_test)
-    theta_min: np.array = np.exp(np.negative(predictor_test))
     n_samples: int = predictor_test.shape[0]
-    granularity=(np.min(np.diff(np.ravel(np.unique(time)))) - 1e-6)
-    print('granularity', granularity)
 
     zero_flag: bool = False
     if 0 not in time:
@@ -331,7 +327,7 @@ def get_cumulative_hazard_function_ah(
         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
     else:
         cumulative_hazard: np.array = np.empty((n_samples, time.shape[0]))
-    
+
     def hazard_function_integrate(s):
         return baseline_hazard_estimator_ah(
             time=s,
@@ -339,19 +335,23 @@ def get_cumulative_hazard_function_ah(
             event_train=event_train,
             predictor_train=predictor_train,
         )
-    
-    # integration_times = np.arange(
-    #     start=np.round(np.min(theta) * np.min(time)),
-    #     stop=np.round(np.max(theta) * np.max(time)),
-    #     step=granularity,
-    # )
-    integration_times = np.arange(
-        start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
+
+    integration_times = np.stack(
+        [
+            np.unique(
+                np.ravel(y_test)[
+                    np.ravel((np.abs(y_test) == y_test).astype(np.bool_))
+                ]
+            )
+            * i
+            for i in np.round(np.exp(np.ravel(predictor_test)), 2)
+        ]
     )
+    integration_times = np.unique((np.ravel(integration_times)))
 
     integration_times = np.concatenate([[0], integration_times])
+
     integration_values = np.zeros(integration_times.shape[0])
-    print('integration times',integration_values.shape[0])
     for _ in range(1, integration_values.shape[0]):
         integration_values[_] = (
             integration_values[_ - 1]
@@ -362,7 +362,6 @@ def get_cumulative_hazard_function_ah(
                 vec_func=False,
             )[0]
         )
-
     for _ in range(n_samples):
         cumulative_hazard[_] = (
             integration_values[
@@ -371,7 +370,7 @@ def get_cumulative_hazard_function_ah(
                 )
                 - 1
             ]
-            * theta_min[_]
+            / theta[_]
         )
     if zero_flag:
         cumulative_hazard = cumulative_hazard[:, 1:]
