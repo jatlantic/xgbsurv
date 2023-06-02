@@ -632,29 +632,22 @@ def baseline_hazard_estimator_eh(
 
 
 def get_cumulative_hazard_function_eh(
-    #time,
-    #time_train,
-    #event_train,
     X_train, 
     X_test, 
     y_train, 
     y_test,
     predictor_train,
     predictor_test,
-    #granularity=10.0,
 ):
-    print('predictor_train',predictor_train)
-    print('predictor_test',predictor_test)
     time_test, event_test = transform_back(y_test[:,0])
     test_ix = np.argsort(time_test)
     time_test = time_test[test_ix]
     event_test = event_test[test_ix]
     predictor_test = predictor_test[test_ix]
-    time: np.array = time_test #[:,0]
+    time: np.array = time_test
     time_train, event_train = transform_back(y_train[:,0])
     theta: np.array = np.exp(predictor_test)
     n_samples: int = predictor_test.shape[0]
-    granularity=np.min(np.diff(np.ravel(np.unique(time)))) - 1e-6
     zero_flag: bool = False
     if 0 not in time:
         zero_flag = True
@@ -671,23 +664,22 @@ def get_cumulative_hazard_function_eh(
             predictor_train=predictor_train,
         )
 
-    # integration_times = np.arange(
-    #     start=np.round(np.min(theta[:, 0]) * np.min(time)),
-    #     stop=np.round(np.max(theta[:, 0]) * np.max(time)),
-    #     step=granularity,
-    # )
-    integration_times = np.arange(
-        start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
+    integration_times = np.stack(
+        [
+            np.unique(
+                np.ravel(y_test)[
+                    np.ravel((np.abs(y_test) == y_test).astype(np.bool_))
+                ]
+            )
+            * i
+            for i in np.round(np.exp(np.ravel(predictor_test)), 2)
+        ]
     )
-    print(np.round(np.max(theta) * np.max(time)) + 0.01)
-    print(time)
-    print(granularity)
-    print(integration_times)
-    integration_times = np.concatenate([[0], integration_times])
+    integration_times = np.unique((np.ravel(integration_times)))
+
+    integration_times = np.concatenate([[0], integration_times, [np.max(integration_times) + 0.01]])
     integration_values = np.zeros(integration_times.shape[0])
     for _ in range(1, integration_values.shape[0]):
-        print(_)
-        
         integration_values[_] = (
             integration_values[_ - 1]
             + quadrature(
@@ -697,7 +689,6 @@ def get_cumulative_hazard_function_eh(
                 vec_func=False,
             )[0]
         )
-        print(integration_values[_])
 
     for _ in range(n_samples):
         cumulative_hazard[_] = (
