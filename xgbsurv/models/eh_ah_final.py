@@ -299,7 +299,10 @@ def baseline_hazard_estimator_ah(
             numerator += gaussian_kernel(difference)
     numerator = inverse_bandwidth_sample_size * numerator
     denominator = inverse_sample_size * denominator
-    return numerator / denominator
+    if denominator <= 0.0:
+        return 0.0
+    else:
+        return numerator / denominator
 
 # latest version
 # TODO: simplify inputs
