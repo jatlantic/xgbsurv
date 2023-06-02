@@ -273,23 +273,19 @@ def aft_baseline_hazard_estimator(
 # TODO: simplify inputs, can we use numba (quad - tricky)
 #@jit(nopython=True, cache=True, fastmath=True)
 def get_cumulative_hazard_function_aft(
-    X_train, 
-    X_test, 
-    y_train, 
+    X_train,
+    X_test,
+    y_train,
     y_test,
     predictor_train,
     predictor_test,
-    #granularity=0.05,
 ):
-    
     time_test, event_test = transform_back(y_test)
     # changed to unique
     time: np.array = np.unique(time_test)
-    time_train, event_train = transform_back(y_train)    
+    time_train, event_train = transform_back(y_train)
     theta: np.array = np.exp(predictor_test)
     n_samples: int = predictor_test.shape[0]
-    granularity=np.min(np.diff(np.ravel(np.unique(time)))) - 1e-6
-    print('granularity', granularity)
 
     zero_flag: bool = False
     if 0 not in time:
@@ -304,17 +300,21 @@ def get_cumulative_hazard_function_aft(
             time=s,
             time_train=time_train,
             event_train=event_train,
-            predictor_train=predictor_train,    
+            predictor_train=predictor_train,
         )
 
-    # integration_times = np.arange(
-    #     start=np.round(np.min(theta) * np.min(time)),
-    #     stop=np.round(np.max(theta) * np.max(time)),
-    #     step=granularity,
-    # )
-    integration_times = np.arange(
-        start=0, stop=np.round(np.max(theta) * np.max(time)) + 0.01, step=granularity
+    integration_times = np.stack(
+        [
+            np.unique(
+                np.ravel(y_test)[
+                    np.ravel((np.abs(y_test) == y_test).astype(np.bool_))
+                ]
+            )
+            * i
+            for i in np.round(np.exp(np.ravel(predictor_test)), 2)
+        ]
     )
+    integration_times = np.unique((np.ravel(integration_times)))
 
     integration_times = np.concatenate([[0], integration_times])
 
@@ -330,12 +330,9 @@ def get_cumulative_hazard_function_aft(
                 vec_func=False,
             )[0]
         )
-
     for _ in range(n_samples):
         cumulative_hazard[_] = integration_values[
-            np.digitize(
-                x=time * theta[_], bins=integration_times, right=False
-                )
+            np.digitize(x=time * theta[_], bins=integration_times, right=False)
             - 1
         ]
     if zero_flag:
