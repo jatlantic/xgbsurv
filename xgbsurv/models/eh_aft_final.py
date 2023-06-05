@@ -9,6 +9,7 @@ from numba import cfunc
 from scipy.stats import norm
 from sklearn.utils.extmath import safe_sparse_dot
 from typeguard import typechecked
+from typing import Optional
 
 from math import exp, sqrt, pi, erf, pow, log
 
@@ -23,19 +24,45 @@ CDF_ZERO: float = 0.5
 def aft_likelihood(
     y: np.array,
     linear_predictor: np.array,
-    sample_weight: np.array = 1.0,
-    bandwidth: np.array = None
+    sample_weight: float = 1.0,
+    bandwidth: Optional[float] = None
 ) -> np.array:
+    
+    """Accelerated Failure Time Model's pseudo likelihood function.
 
-    # if not isinstance(y, np.ndarray):
-    #     y = y.values
+    Parameters
+    ----------
+    y : np.array
+        True values.
+    linear_predictor : np.array
+        Model predictions.
+    sample_weight : float, optional
+        Weight to set at your disgression, by default 1.0.
+    bandwidth : float, optional
+        Bandwidth constant, set by default.
+
+    Returns
+    -------
+    np.array
+        Pseudo likelihood.
+
+    References
+    ----------
+    .. [1] Zhong, Q., Mueller, J. W. & Wang, J.-L. 
+    Deep extended hazard models for survival analysis. 
+    Advances in Neural Information Processing Systems 34, 15111–15124 (2021).
+
+    .. [2] Tseng, Yi-Kuan, and Ken-Ning Shu. 2011. 
+    “Efficient Estimation for a Semiparametric Extended Hazards Model.” 
+    Communications in Statistics—Simulation and Computation® 40 (2): 258–73.
+
+    """
 
     time, event = transform_back(y)
     n_events = np.sum(event)
     n_samples: int = time.shape[0]
     if bandwidth==None:
         bandwidth = 1.30 * pow(n_samples, -0.2)
-    #print('bandwidth', bandwidth)
     linear_predictor: np.array = linear_predictor * sample_weight
     R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
@@ -44,11 +71,6 @@ def aft_likelihood(
     _: np.array
     kernel_matrix: np.array
     integrated_kernel_matrix: np.array
-
-    # mistake here, remove
-    #(_, kernel_matrix, integrated_kernel_matrix,) = difference_kernels(
-    #    a=linear_predictor, b=linear_predictor[event_mask], bandwidth=bandwidth
-    #)
 
     (_, kernel_matrix, integrated_kernel_matrix,) = difference_kernels(
         a=R_linear_predictor, b=R_linear_predictor[event_mask], bandwidth=bandwidth
@@ -130,28 +152,43 @@ def modify_hessian(hessian: np.array):
 
 @jit(nopython=True, cache=True, fastmath=True)
 def aft_objective(
-    y: np.array, linear_predictor: np.array, sample_weight: np.array = 1.0
-):
+    y: np.array, 
+    linear_predictor: np.array, 
+    sample_weight: float = 1.0
+)->tuple[np.array, np.array]:
+    """Objective function for Boosted Extendend Hazards Model.
+
+    Parameters
+    ----------
+    y : np.array
+        _description_
+    linear_predictor : np.array
+        _description_
+    sample_weight : float, optional
+        Sample weight, by default 1.0.
+    Returns
+    -------
+    tuple[np.array, np.array]
+        Tuple containing the negative gradients and the diagonal hessian
+        of ones.
+    """
+
     time, event = transform_back(y)
     n_events = np.sum(event)
     linear_predictor: np.array = np.exp(sample_weight * linear_predictor)
     linear_predictor = np.log(time * linear_predictor)
-    #R_linear_predictor: np.array = np.log(time * np.exp(linear_predictor))
     n_samples: int = time.shape[0]
     bandwidth = 1.30 * pow(n_samples, -0.2)
     gradient: np.array = np.empty(n_samples)
-    hessian: np.array = np.empty(n_samples)
     event_mask: np.array = event.astype(np.bool_)
     inverse_sample_size: float = 1 / n_samples
     inverse_bandwidth: float = 1 / bandwidth
-    squared_inverse_bandwidth: float = inverse_bandwidth**2
     inverse_sample_size_bandwidth: float = (
         inverse_sample_size * inverse_bandwidth
     )
 
     zero_kernel: float = PDF_PREFACTOR
     event_count: int = 0
-    squared_zero_kernel: float = zero_kernel**2
 
     (
         difference_outer_product,
@@ -239,11 +276,29 @@ def aft_objective(
 
 @jit(nopython=True, cache=True, fastmath=True)
 def aft_baseline_hazard_estimator(
-    time, # unique test time(?), time to integrate over
+    time, # unique test time, time to integrate over
     time_train,
     event_train,
     predictor_train,
 ):
+    """Get Accelerated Failure Time Model's baseline hazard.
+
+    Parameters
+    ----------
+    time : np.array
+        _description_
+    time_train : np.array
+        _description_
+    event_train : np.array
+        _description_
+    predictor_train : np.array
+        _description_
+
+    Returns
+    -------
+    np.array
+        Baseline hazard.
+    """
     n_samples: int = time_train.shape[0]
     bandwidth = 1.30 * pow(n_samples, -0.2)
     inverse_bandwidth: float = 1 / bandwidth
@@ -269,8 +324,6 @@ def aft_baseline_hazard_estimator(
     else:
         return numerator / denominator
 
-# latest version
-# TODO: simplify inputs, can we use numba (quad - tricky)
 #@jit(nopython=True, cache=True, fastmath=True)
 def get_cumulative_hazard_function_aft(
     X_train,
@@ -279,8 +332,31 @@ def get_cumulative_hazard_function_aft(
     y_test,
     predictor_train,
     predictor_test,
-):
-    time_test, event_test = transform_back(y_test)
+)-> pd.DataFrame:
+    
+    """Get cumulative hazard function of Accelerated Failure Time Model.
+
+    Parameters
+    ----------
+    X_train : np.array
+        _description_
+    X_test : np.array
+        _description_
+    y_train : np.array
+        _description_
+    y_test : np.array
+        _description_
+    predictor_train : np.array
+        _description_
+    predictor_test : np.array
+        _description_
+
+    Returns
+    -------
+    pd.DataFrame
+        Cumulative hazard dataframe.
+    """
+    time_test, _ = transform_back(y_test)
     # changed to unique
     time: np.array = np.unique(time_test)
     time_train, event_train = transform_back(y_train)
@@ -338,6 +414,9 @@ def get_cumulative_hazard_function_aft(
         cumulative_hazard = cumulative_hazard[:, 1:]
         time = time[1:]
     return pd.DataFrame(cumulative_hazard, columns=time).T.sort_index(axis=0)
+
+
+
 
 # version with hessian
 

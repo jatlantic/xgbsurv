@@ -6,6 +6,7 @@ import numpy as np
 import math
 from math import exp, sqrt, pi, erf, pow
 import pandas as pd
+import time as t
 
 
 # torch transform function
@@ -105,8 +106,6 @@ def breslow_likelihood_torch(y: torch.Tensor, log_partial_hazard: torch.Tensor) 
     if isinstance(y, pd.Series):
         y = torch.tensor(y.values)
 
-    #print(type(y))
-    #print(y)
     time, event = transform_back_torch(y)
     # Assumes times have been sorted beforehand.
     partial_hazard = torch.exp(log_partial_hazard)
@@ -251,7 +250,7 @@ def deephit_likelihood_1_torch(y, phi, duration_bins):
     idx_durations = idx_durations.view(-1, 1)
     #print('shape idx dur after', idx_durations.shape)
     # epsilon 
-    epsilon = np.finfo(float).eps
+    epsilon = torch.finfo(float).eps
     # pad phi as in pycox
     pad = torch.zeros_like(phi[:,:1])
     phi = torch.cat([phi, pad],axis=1)
@@ -385,7 +384,7 @@ def kernel(a, b, bandwidth):
 
 
 def integrated_kernel(a, b, bandwidth):
-    integrated_kernel_matrix: np.array = torch.empty(
+    integrated_kernel_matrix: torch.tensor = torch.empty(
         (a.shape[0], b.shape[0])
     )
     for ix in range(a.shape[0]):
@@ -481,13 +480,16 @@ def eh_likelihood_torch_2(
     #print('linear_predictor type',type(linear_predictor))
     #y1 = y[:,0]
     time, event = transform_back_torch(y)
+    #print('time.shape',time.shape)
+    #print('event.shape',event.shape)
+    #print('linear_predictor.shape', linear_predictor.shape)
     #time, event = transform_back_torch(y)
     # need two predictors here
     linear_predictor_1: torch.tensor = linear_predictor[:, 0] * sample_weight
     linear_predictor_2: torch.tensor = linear_predictor[:, 1] * sample_weight
     exp_linear_predictor_1 = torch.exp(linear_predictor_1)
     exp_linear_predictor_2 = torch.exp(linear_predictor_2)
-
+    #print('linear_predictor_1.shape', linear_predictor_1.shape)
     n_events: int = torch.sum(event)
     n_samples: int = time.shape[0]
     if not bandwidth:
@@ -543,6 +545,7 @@ class EHLoss(_Loss):
         self.bandwidth = bandwidth
 
     def forward(self, prediction, input):
+        
         loss = eh_likelihood_torch_2(prediction,input, bandwidth=self.bandwidth)
         #print('loss', loss)
         return loss
@@ -660,12 +663,10 @@ def ah_likelihood_torch(
     linear_predictor: torch.tensor = linear_predictor * sample_weight
     if not bandwidth:
         bandwidth = 1.30 * torch.pow(n_samples, torch.tensor(-0.2))
-    # R_linear_predictor: torch.tensor = torch.log(
-    #     time * torch.exp(linear_predictor)
-    # )
+
     R_linear_predictor: torch.tensor = torch.log(
         time * torch.exp(linear_predictor))
-    # simplification of above leads to errors
+
     
     inverse_sample_size_bandwidth: float = 1 / (n_samples * bandwidth)
     event_mask = event.bool()
@@ -749,9 +750,9 @@ def risk_matrix_loop(time):
     risk_set[idx] = set_count
     return risk_set
 
-def KaplanMeier_torch(time: np.array, event: np.array, 
+def KaplanMeier_torch(time: torch.tensor, event: torch.tensor, 
                 cens_dist: bool = False
-) -> tuple[np.array, np.array] | tuple[np.array, np.array, np.array]:
+) -> tuple[torch.tensor, torch.tensor] | tuple[torch.tensor, torch.tensor, torch.tensor]:
     """_summary_
 
     Parameters
@@ -787,32 +788,28 @@ def KaplanMeier_torch(time: np.array, event: np.array,
     #     event = event[order]
     
     times = torch.unique(time)
-    #idx = np.digitize(time, np.unique(time))
-    # numpy diff nth discrete difference over index, add 1 at the beginning
-    #breaks = np.flatnonzero(np.concatenate(([1], np.diff(idx))))
 
-    # flatnonzero return indices that are nonzero in flattened version
-    #n_events = np.add.reduceat(event, breaks, axis=0)
     unique_times, inverse_indices = time.unique(return_inverse=True)
 
     # Prepare a tensor for the event counts
     event_counts = torch.zeros_like(unique_times)
-
+    #print('compute kaplan meier')
     # Add up the events for each unique time using scatter_add_
     event_counts.scatter_add_(0, inverse_indices, event)
     n_events = event_counts
-    #n_at_risk = risk_matrix_loop(time)
-    n_at_risk = torch.unique((torch.outer(time,time)>=np.square(time)).int().T, dim=0).sum(axis=1).flip(0)
+    n_at_risk = torch.unique((torch.outer(time,time)>=torch.square(time)).int().T, dim=0).sum(axis=1).flip(0)
+
     n_at_risk = n_at_risk.float()
     n_events = n_events.float()
     # censoring distribution for ipcw estimation
     #n_censored a vector, with 1 at censoring position, zero elsewhere
+
     if cens_dist:
         n_at_risk -= n_events
         # for each unique time step how many observations are censored
         censored = 1-event
         n_censored = torch.zeros_like(unique_times)
-        #n_censored = np.add.reduceat(censored, breaks, axis=0)
+
         n_censored.scatter_add_(0, inverse_indices, censored)
         mask = (n_censored != 0)
         c = torch.zeros_like(times)
@@ -831,23 +828,28 @@ def KaplanMeier_torch(time: np.array, event: np.array,
         out=torch.zeros(times.shape[0]),
         #where=mask,
         )
-        print(vals)
+
         estimates = torch.cumprod(vals, dim=0)
         return times, estimates
     
+def ipcw_estimate_torch(time: torch.tensor, event: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
 
-def ipcw_estimate_torch(time: np.array, event: np.array) -> tuple[np.array, np.array]:
-
+    #print(time.shape, event.shape)
     unique_time, cens_dist, n_censored = KaplanMeier_torch(time, event, cens_dist=True) 
     #print(cens_dist)
     # similar approach to sksurv
     idx = torch.searchsorted(unique_time, time)
-    est = 1.0/cens_dist[idx] # improve as divide by zero
+
+    mask1 = cens_dist[idx] != 0.0
+
+    est = torch.ones_like(cens_dist[idx])
+    est[mask1] = 1.0/cens_dist[idx][mask1]
+    #est = 1.0/cens_dist[idx] # improve as divide by zero
+
     est[n_censored[idx]!=0] = 0
     # in R mboost there is a maxweight of 5
     est[est>5] = 5
     return unique_time, est
-
 
 def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
     """_summary_
@@ -871,23 +873,24 @@ def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
 
     """
     time, event = transform_back_torch(y) 
-    print('time shape', time.shape)
-    print('event shape', event.shape)
+    #print('time shape', time.shape)
+    #print('event shape', event.shape)
     n = event.shape[0]
 
     _, ipcw_new = ipcw_estimate_torch(time, event)
 
     ipcw = ipcw_new #ipcw_old consider copy
-    survtime = time
+    #survtime = time
 
     fill = torch.square(ipcw)
-    wweights = fill.repeat(n,1).T
-    # wweights = torch.full((n,n), np.square(ipcw)).T # good here
+    #fill.repeat(n,1).T
+    wweights = fill.unsqueeze(1).expand(-1, n)
 
-    # weightsj = torch.full((n,n), survtime).T
-    weightsj = survtime.repeat(n,1).T
-    # weightsk = torch.full((n,n), survtime) #byrow = TRUE in R, in np automatic no T required
-    weightsk = survtime.repeat(n,1)
+    #survtime.repeat(n,1).T
+    weightsj = time.unsqueeze(1).expand(-1, n)
+   
+    #survtime.repeat(n,1)
+    weightsk = time.unsqueeze(1).expand(-1, n).T
     
     if approach == 'mboost':
         # implementing   weightsI <- ifelse(weightsj == weightsk, .5, (weightsj < weightsk) + 0) - diag(.5, n,n)
@@ -895,30 +898,66 @@ def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
         weightsI = torch.empty((n,n))
         weightsI[weightsj == weightsk] = 0.5
         weightsI = (weightsj < weightsk).astype(int)
-        weightsI = weightsI - torch.diag(0.5*np.ones(n))
+        weightsI = weightsI - torch.diag(0.5*torch.ones(n))
     if approach == 'paper':
         weightsI = (weightsj < weightsk).int()
 
     wweights = wweights * weightsI 
-    
+    del weightsI, weightsk, weightsj
     wweights = wweights / torch.sum(wweights)
 
     return wweights
 
-
-def cind_likelihood_torch(predictor: np.array,y: np.array, sigma: np.array = 0.1) -> np.array:
+def cind_likelihood_torch(predictor: torch.tensor, y: torch.tensor, sigma: torch.tensor = 200) -> torch.tensor:
     # f corresponds to predictor in paper
+
+    if isinstance(predictor, np.ndarray):
+        predictor = torch.from_numpy(predictor)
+    if isinstance(predictor, pd.Series):
+        predictor = torch.tensor(predictor.values)
+    if isinstance(y, np.ndarray):
+        y = torch.from_numpy(y)
+    if isinstance(y, pd.Series):
+        y = torch.tensor(y.values)
+
+    if predictor.ndim > 1:
+        predictor = predictor.reshape(-1)
+    if y.ndim > 1:
+        y = y.reshape(-1)
+    #print('type y',type(y))
+    # order
+    # y_abs = torch.abs(y)
+    # #if torch.any(y_abs[:-1] <= y_abs[1:]) is False:
+    # print('Values are being sorted!')
+    # order = torch.argsort(y_abs, kind="mergesort")
+    # y = y[order]
+    #print('predictor', predictor)
+    # print('y',y)
     time, _ = transform_back_torch(y)
     n = time.shape[0]
-    #etaj = np.full((n,n), predictor)
-    etaj = predictor.repeat(n,1) 
-    #etak = np.full((n,n), predictor).T
-    etak = predictor.repeat(n,1).T
-    x = (etak - etaj) 
-    weights_out = compute_weights_torch(y)
-    c_loss = 1/(1+torch.exp(x/sigma))*weights_out
-    return -torch.sum(c_loss)
 
+    #etaj = predictor.repeat(n,1)
+    etaj = predictor.unsqueeze(1).expand(-1, n).T 
+    #»etak = predictor.repeat(n,1).T
+    etak = predictor.unsqueeze(1).expand(-1, n) 
+    x = (etak - etaj) 
+    nan_mask = torch.isnan(etaj)
+    # Detect Inf values
+    inf_mask = torch.isinf(etaj)
+    del etak, etaj
+    weights_out = compute_weights_torch(y)
+    thres = torch.max(x/sigma)
+    if thres>20:
+        print('sleep')
+        print('thres',thres)
+        #t.sleep(2)
+    c_loss = 1/(1+torch.exp(x/sigma))*weights_out
+    del weights_out
+    # Check if either mask contains True
+    if torch.any(nan_mask | inf_mask):
+        print("NaN or Inf value detected!")
+    #print('c_loss',c_loss)
+    return torch.sum(c_loss) #/n
 
 class CindLoss(_Loss):
     def __init__(self, size_average=None, reduce=None, reduction: str = 'mean') -> None:
@@ -931,9 +970,9 @@ class CindLoss(_Loss):
 
 # TODO: Write in Pytorch, especially equivalent for add.reduceat()
 
-# def KaplanMeier(time: np.array, event: np.array, 
+# def KaplanMeier(time: torch.tensor, event: torch.tensor, 
 #                 cens_dist: bool = False
-# ) -> tuple[np.array, np.array] | tuple[np.array,np.array,np.array]:
+# ) -> tuple[torch.tensor, torch.tensor] | tuple[torch.tensor,torch.tensor,torch.tensor]:
 #     """_summary_
 
 #     Parameters
@@ -1005,7 +1044,7 @@ class CindLoss(_Loss):
 #         estimates = np.cumprod(vals)
 #         return times, estimates
 
-# def ipcw_estimate(time: np.array, event: np.array) -> tuple[np.array, np.array]:
+# def ipcw_estimate(time: torch.tensor, event: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
 #     """IPCW
 
 #     Parameters
@@ -1115,3 +1154,176 @@ class CindLoss(_Loss):
 #     weights_out = compute_weights(y)
 #     c_loss = 1/(1+np.exp(x/sigma))*weights_out
 #     return -np.sum(c_loss)
+
+
+# old 1.6. 23
+
+# # def ipcw_estimate_torch(time: torch.tensor, event: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
+
+# #     unique_time, cens_dist, n_censored = KaplanMeier_torch(time, event, cens_dist=True) 
+# #     #print(cens_dist)
+# #     # similar approach to sksurv
+# #     idx = torch.searchsorted(unique_time, time)
+# #     est = 1.0/cens_dist[idx] # improve as divide by zero
+# #     est[n_censored[idx]!=0] = 0
+# #     # in R mboost there is a maxweight of 5
+# #     est[est>5] = 5
+# #     return unique_time, est
+
+# def ipcw_estimate_torch(time: torch.tensor, event: torch.tensor) -> tuple[torch.tensor, torch.tensor]:
+#     print('compute ipcw before kaplanmeier')
+#     unique_time, cens_dist, n_censored = KaplanMeier_torch(time, event, cens_dist=True) 
+#     #print(cens_dist)
+#     # dummy
+#     #unique_time = torch.unique(time)
+#     #cens_dist = torch.ones_like(time)
+#     #n_censored = torch.ones_like(unique_time)
+#     #est = torch.ones_like(time)
+#     # similar approach to sksurv
+#     idx = torch.searchsorted(unique_time, time)
+
+#     mask1 = cens_dist[idx] != 0.0
+
+#     est = torch.ones_like(cens_dist[idx])
+#     est[mask1] = 1.0/cens_dist[idx][mask1]
+#     #est = 1.0/cens_dist[idx] # improve as divide by zero
+
+#     est[n_censored[idx]!=0] = 0
+#     # in R mboost there is a maxweight of 5
+#     est[est>5] = 5
+#     return unique_time, est
+
+
+# # def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
+# #     """_summary_
+
+# #     Parameters
+# #     ----------
+# #     y : npt.NDArray[float]
+# #         Sorted array containing survival time and event where negative value is taken as censored event.
+# #     approach : str, optional
+# #         Choose mboost implementation or paper implementation of c-boosting, by default 'paper'.
+
+# #     Returns
+# #     -------
+# #     npt.NDArray[float]
+# #         Array of weights.
+
+# #     References
+# #     ----------
+# #     .. [1] 1. Mayr, A. & Schmid, M. Boosting the concordance index for survival data–a unified framework to derive and evaluate biomarker combinations. 
+# #        PloS one 9, e84483 (2014).
+
+# #     """
+# #     time, event = transform_back_torch(y) 
+# #     print('time shape', time.shape)
+# #     print('event shape', event.shape)
+# #     n = event.shape[0]
+
+# #     _, ipcw_new = ipcw_estimate_torch(time, event)
+
+# #     ipcw = ipcw_new #ipcw_old consider copy
+# #     survtime = time
+
+# #     fill = torch.square(ipcw)
+# #     wweights = fill.repeat(n,1).T
+# #     # wweights = torch.full((n,n), np.square(ipcw)).T # good here
+
+# #     # weightsj = torch.full((n,n), survtime).T
+# #     weightsj = survtime.repeat(n,1).T
+# #     # weightsk = torch.full((n,n), survtime) #byrow = TRUE in R, in np automatic no T required
+# #     weightsk = survtime.repeat(n,1)
+    
+# #     if approach == 'mboost':
+# #         # implementing   weightsI <- ifelse(weightsj == weightsk, .5, (weightsj < weightsk) + 0) - diag(.5, n,n)
+# #         # from mboost github repo
+# #         weightsI = torch.empty((n,n))
+# #         weightsI[weightsj == weightsk] = 0.5
+# #         weightsI = (weightsj < weightsk).astype(int)
+# #         weightsI = weightsI - torch.diag(0.5*np.ones(n))
+# #     if approach == 'paper':
+# #         weightsI = (weightsj < weightsk).int()
+
+# #     wweights = wweights * weightsI 
+    
+# #     wweights = wweights / torch.sum(wweights)
+
+# #     return wweights
+
+# def compute_weights_torch(y, approach: str='paper') -> torch.tensor:
+#     """_summary_
+
+#     Parameters
+#     ----------
+#     y : npt.NDArray[float]
+#         Sorted array containing survival time and event where negative value is taken as censored event.
+#     approach : str, optional
+#         Choose mboost implementation or paper implementation of c-boosting, by default 'paper'.
+
+#     Returns
+#     -------
+#     npt.NDArray[float]
+#         Array of weights.
+
+#     References
+#     ----------
+#     .. [1] 1. Mayr, A. & Schmid, M. Boosting the concordance index for survival data–a unified framework to derive and evaluate biomarker combinations. 
+#        PloS one 9, e84483 (2014).
+
+#     """
+#     time, event = transform_back_torch(y) 
+
+#     n = event.shape[0]
+#     print('compute weights before ipcw')
+#     _, ipcw_new = ipcw_estimate_torch(time, event)
+#     #del _
+#     # fake one below
+#     #ipcw_new = torch.ones(n)
+
+
+#     ipcw = ipcw_new #ipcw_old consider copy
+#     del ipcw_new
+#     #survtime = time
+
+#     fill = torch.square(ipcw).reshape(-1)
+#     print('fill shape', fill.shape)
+
+#     wweights = fill.unsqueeze(1).expand(-1, n) #fill.repeat(n,1).T
+#     del fill
+#     weightsj = time.unsqueeze(1).expand(-1, n)#time.repeat(n,1).T
+#     weightsk = weightsj.clone().T #time.repeat(n,1)
+#     del time
+#     if approach == 'mboost':
+#         # implementing   weightsI <- ifelse(weightsj == weightsk, .5, (weightsj < weightsk) + 0) - diag(.5, n,n)
+#         # from mboost github repo
+#         weightsI = torch.empty((n,n))
+#         weightsI[weightsj == weightsk] = 0.5
+#         weightsI = (weightsj < weightsk).astype(int)
+#         weightsI = weightsI - torch.diag(0.5*torch.ones(n))
+#     if approach == 'paper':
+#         weightsI = (weightsj < weightsk).int()
+
+#     wweights = wweights * weightsI 
+    
+#     wweights = wweights / torch.sum(wweights)
+#     del weightsj, weightsk, weightsI
+#     return wweights
+
+
+# def cind_likelihood_torch(y: torch.tensor, predictor: torch.tensor, sigma: torch.tensor = 0.1) -> torch.tensor:
+#     # f corresponds to predictor in paper
+#     if predictor.ndim > 1:
+#         predictor = predictor.reshape(-1)
+#     if y.ndim > 1:
+#         y = y.reshape(-1)
+#     time, _ = transform_back_torch(y)
+#     n = time.shape[0]
+#     etaj = predictor.unsqueeze(1).expand(-1, n).T #predictor.repeat(n,1)
+#     etak = predictor.unsqueeze(1).expand(-1, n) #predictor.repeat(n,1).T
+#     x = (etak - etaj) 
+#     del etaj, etak
+#     print('y shape', y.shape)
+#     weights_out = compute_weights_torch(y)
+#     #print('weights_out.shape',weights_out.shape)
+#     c_loss = 1/(1+torch.exp(x/sigma)) #*weights_out
+#     return -torch.sum(c_loss)

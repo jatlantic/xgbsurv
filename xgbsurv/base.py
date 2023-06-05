@@ -72,7 +72,7 @@ class XGBSurv(XGBRegressor):
         else:
             eval_loss = eval_metric 
 
-        super().__init__(objective=obj, eval_metric= eval_loss, **kwargs)
+        super().__init__(objective=obj, eval_metric= eval_loss, disable_default_eval_metric=1,**kwargs)
         #disable_default_eval_metric=disable,
 
     def fit(self, X, y, *, eval_test_size=None, **kwargs):
@@ -82,8 +82,8 @@ class XGBSurv(XGBRegressor):
         #    raise TypeError('X must be a numpy array')
         
         # TODO: remove for efficiency
-        self.y = y
-        self.X = X
+        #self.y = y
+        #self.X = X
         # deephit multioutput
         # so far this creates errors
         # if self.model_type=='deephit_objective':
@@ -103,6 +103,7 @@ class XGBSurv(XGBRegressor):
                                                 test_size=eval_test_size,
                                                 random_state=params['random_state'],
                                                 stratify=np.sign(y)) 
+            
             
             X_train, y_train = self._sort_X_y(X_train, y_train)
             X_test, y_test = self._sort_X_y(X_test, y_test)
@@ -165,17 +166,26 @@ class XGBSurv(XGBRegressor):
         """Get implemented survival objective functions."""
         return objective_dict
     
-
     def _sort_X_y(self, X, y):
         """Sort X, y data by absolute time."""
-        if isinstance(y, pd.Series):
+        if isinstance(y, (pd.Series, pd.DataFrame)):
             y = y.values
         if not isinstance(y, np.ndarray):
             print('y error',y, type(y))
             raise ValueError(f'y is not numpy.ndarray. Got {type(y)}.')
-        y_abs = np.absolute(y)
-        if np.all(np.diff(y_abs) >= 0) is False:
-            #print('Values are being sorted!')
+        #new condition begin
+        if y.ndim > 1:
+            #print("Array has more than one dimension.")
+            # Check if the array has more than one column
+            if y.shape[1] > 1:
+                y_abs = y[:,0]
+        else:        
+            y_abs = y.copy()        
+        y_abs = np.absolute(y_abs)
+        #condition end
+        #y_abs = np.absolute(y)
+        if not np.all(np.diff(y_abs) >= 0):
+            print('Values are being sorted!')
             order = np.argsort(y_abs, kind="mergesort")
             y = y[order]
             X = X[order]

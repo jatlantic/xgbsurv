@@ -80,17 +80,33 @@ def ah_likelihood(
     linear_predictor: np.array, 
     sample_weight: np.array = 1.0,
 ) -> np.array:
-    """Partial likelihood estimator for Accelerated Hazards model.
+    """Accelerated Hazards Model likelihood function.
 
-    Args:
-        linear_predictor (np.array): Linear predictor of risk: `X @ coef`. Shape = (n_samples,).
-        time (np.array): Array containing event/censoring times of shape = (n_samples,).
-        event (np.array): Array containing binary event indicators of shape = (n_samples,).
-        bandwidth_function (str, optional): _description_. Defaults to "jones_1990".
+    Parameters
+    ----------
+    y : np.array
+        _description_
+    linear_predictor : np.array
+        _description_
+    sample_weight : np.array, optional
+        _description_, by default 1.0
 
-    Returns:
-        np.array: Scalar value of mean partial log likelihood estimate.
+    Returns
+    -------
+    np.array
+        Pseudo likelihood.
+
+    References
+    ----------
+    .. [1] Chen, Ying Qing, Nicholas P Jewell, and Jingrong Yang. 2003. 
+    “Accelerated Hazards Model: Method, Theory and Applications.” 
+    Handbook of Statistics 23: 431–41.
+
+    .. [2] Zhong, Q., Mueller, J. W. & Wang, J.-L. 
+    Deep extended hazard models for survival analysis. 
+    Advances in Neural Information Processing Systems 34, 15111–15124 (2021).
     """
+
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
     n_events = np.sum(event)
@@ -133,33 +149,38 @@ def ah_likelihood(
 @jit(nopython=True, cache=True, fastmath=True)
 def ah_objective(
     y: np.array,
-    linear_predictor: np.array
-) -> Tuple[np.array, np.array]:
-    """Gradient of the Accelerated Hazards model in numba-compatible form.
+    linear_predictor: np.array,
+    sample_weight: np.array = 1.0
+) -> tuple[np.array, np.array]:
+    """Calculate gradient of Accelerated Hazards Model.
 
-    Args:
-        time (np.array): Array containing event/censoring times of shape = (n_samples,).
-        event (np.array): Array containing binary event indicators of shape = (n_samples,).
-        linear_predictor (np.array): Linear predictor of risk: `X @ coef`. Shape = (n_samples,).
-        bandwidth_function (str, optional): _description_. Defaults to "jones_1990".
-        hessian_modification_strategy (str, optional): _description_. Defaults to "flip".
+    Parameters
+    ----------
+    y : np.array
+        _description_
+    linear_predictor : np.array
+        _description_
+    sample_weight : np.array, optional
+        _description_, by default 1.0
 
-    Returns:
-        Tuple[np.array, np.array]: Tuple containing the negative gradients and the hessian
-            of with the linear predictor.
+    Returns
+    -------
+    tuple[np.array, np.array]
+        Tuple containing the negative gradients and the diagonal hessian
+        of ones.
     """
+    
+
     time, event = transform_back(y)
     n_samples: int = time.shape[0]
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
-    linear_predictor_vanilla: np.array = np.exp(-linear_predictor)
+    linear_predictor_vanilla: np.array = np.exp(-linear_predictor)* sample_weight
     linear_predictor = np.log(time * np.exp(linear_predictor))
     n_events: int = np.sum(event)
     gradient: np.array = np.empty(n_samples)
-    hessian: np.array = np.empty(n_samples)
     event_mask: np.array = event.astype(np.bool_)
     inverse_sample_size: float = 1 / n_samples
     inverse_bandwidth: float = 1 / bandwidth
-    squared_inverse_bandwidth: float = inverse_bandwidth**2
 
     zero_kernel: float = PDF_PREFACTOR
     zero_integrated_kernel: float = CDF_ZERO
@@ -273,11 +294,29 @@ def ah_objective(
 
 @jit(nopython=True, cache=True, fastmath=True)
 def baseline_hazard_estimator_ah(
-    time,
-    time_train,
-    event_train,
-    predictor_train,
+    time: np.array,
+    time_train: np.array,
+    event_train: np.array,
+    predictor_train: np.array,
 ):
+    """Get Accelerated Hazard Model's baseline hazard.
+
+    Parameters
+    ----------
+    time : np.array
+        _description_
+    time_train : np.array
+        _description_
+    event_train : np.array
+        _description_
+    predictor_train : np.array
+        _description_
+
+    Returns
+    -------
+    np.array
+        Baseline hazard.
+    """
     n_samples: int = time_train.shape[0]
     bandwidth = 1.30 * math.pow(n_samples, -0.2)
     inverse_bandwidth: float = 1 / bandwidth
@@ -285,15 +324,14 @@ def baseline_hazard_estimator_ah(
     inverse_bandwidth_sample_size: float = (
         inverse_sample_size * (1 / (time + EPS)) * inverse_bandwidth
     )
-    # removed this log_time: float = time and added log
-    log_time: float = np.log(time + EPS) # added this 24.05.23
+
+    log_time: float = np.log(time + EPS) 
     R_lp: np.array = np.log(time_train * np.exp(predictor_train))
     difference_lp_log_time: np.array = (R_lp - log_time) / bandwidth
     numerator: float = 0.0
     denominator: float = 0.0
     for _ in range(n_samples):
         difference: float = difference_lp_log_time[_]
-        # added [_] for predictor
         denominator += np.exp(-predictor_train[_]) * gaussian_integrated_kernel(difference)
         if event_train[_]:
             numerator += gaussian_kernel(difference)
@@ -307,14 +345,37 @@ def baseline_hazard_estimator_ah(
 # latest version
 # TODO: simplify inputs
 def get_cumulative_hazard_function_ah(
-    X_train, 
-    X_test, 
-    y_train, 
-    y_test,
-    predictor_train,
-    predictor_test,
-):
-    time_test, event_test = transform_back(y_test)
+    X_train: np.array,
+    X_test: np.array, 
+    y_train: np.array,
+    y_test: np.array,
+    predictor_train: np.array,
+    predictor_test: np.array,
+)-> pd.DataFrame:
+    """Get cumulative hazard function of Accelerated Hazards Model.
+
+    Parameters
+    ----------
+    X_train : np.array
+        _description_
+    X_test : np.array
+        _description_
+    y_train : np.array
+        _description_
+    y_test : np.array
+        _description_
+    predictor_train : np.array
+        _description_
+    predictor_test : np.array
+        _description_
+
+    Returns
+    -------
+    pd.DataFrame
+        Cumulative hazard dataframe.
+    """
+    
+    time_test, _ = transform_back(y_test)
     time: np.array = np.unique(time_test)
     time_train, event_train = transform_back(y_train)
     theta: np.array = np.exp(predictor_test)

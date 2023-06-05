@@ -58,42 +58,83 @@ def transform_back(y: npt.NDArray[float]) -> tuple[npt.NDArray[float], npt.NDArr
     event = event.astype(np.int64) # for numba
     return time, event
 
-@jit(nopython=True)
+
+#@jit(nopython=True, cache=True, fastmath=True)
 def sort_X_y(X, y):
+    """Sorts (ascending) X, y by absolute value of y.
+
+    Parameters
+    ----------
+    X : np.array
+        _description_
+    y : np.array
+        _description_
+
+    Returns
+    -------
+    X : np.array
+        _description_
+    y : np.array
+        _description_
+    """
     # naming convention as in sklearn
     # add sorting here, maybe there is a faster way
+    
+    if not isinstance(y, np.ndarray):
+        raise TypeError("y must be numpy.ndarray")
+    
+    if not isinstance(X, np.ndarray):
+        raise TypeError("X must be numpy.ndarray")
 
-    # if not isinstance(y, np.ndarray):
-    #     y_sort = y.to_numpy().copy()
-    # else:
-    #     y_sort = y.copy()
 
-    # if y.ndim>1:
-    #     y_sort = y[:, 0]
-    # else:
-    #     y_sort = y
-    y_abs = np.absolute(y)
-    if np.all(np.diff(y_abs) >= 0) is False:
-        #print('Values are being sorted!')
+    if y.ndim > 1:
+        print("Array has more than one dimension.",y.shape)
+        #Check if the array has more than one column
+        if y.shape[1] > 1:
+            y_abs = y[:,0]
+    else:        
+        y_abs = np.copy(y)        
+    y_abs = np.absolute(y_abs)
+    #y_abs = np.absolute(y)
+
+    if not np.all(np.diff(y_abs) >= 0):
+        print('Values are being sorted!')
         order = np.argsort(y_abs, kind="mergesort")
         y = y[order]
         X = X[order]
     return X, y
 
-def sort_X_y_pandas(X, y):
-    # naming convention as in sklearn
-    if y.ndim>1:
-        y_sort = y.iloc[:, 0].values
-    else:
-        y_sort = y.values
-    # add sorting here, maybe there is a faster way
-    y_abs = np.absolute(y_sort)
 
-    if np.all(np.diff(y_abs) >= 0)==False:
-        print('Values are being sorted!')
-        order = np.argsort(y_abs, kind="mergesort")
-        X = X.reindex(order)
-        y = y.reindex(order)
+def sort_X_y_pandas(X, y):
+    """Sorts (ascending) X, y by absolute value of y.
+
+    Parameters
+    ----------
+    X : pd.DataFrame
+        unsorted
+    y : pd.Series
+        sorted
+
+    Returns
+    -------
+    X : pd.DataFrame
+        sorted
+    y : pd.Series
+        sorted
+    """
+    # no pandas monotonic test implemented 
+    # due to pandas versioning change
+    X = X.reset_index(drop=True)
+    y = y.reset_index(drop=True)
+    if y.values.ndim>1:
+        #print('2d')
+        X = X.iloc[y['target1'].abs().sort_values().index]
+        y = y.iloc[y['target1'].abs().sort_values().index]
+    else:
+        #print('1d')
+        X = X.iloc[y.abs().sort_values().index]
+        y = y.iloc[y.abs().sort_values().index]
+    #print('Values have been sorted!')
     return X, y
 
 
