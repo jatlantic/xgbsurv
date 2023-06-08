@@ -28,3 +28,19 @@ Install in editable mode for development:
 ```sh
 pip install --user -e .
 ```
+
+## Implemented Models & Loss Functions
+
+| Model                     | Loss Function | GBDT | DL   |
+|---------------------------|---------------|------|------|
+| Breslow                   | Loss 1        | ✔️   | ✔️   |
+| Efron                     | Loss 2        | ✔️   | ✔️   |
+| Cboost                    | Loss 3        | ✔️   | ✔️   |
+| Extended Hazards          | Loss 3        | ✔️   | ✔️   |
+| Accelerated Hazards       | Loss 3        | ✔️   | ✔️   |
+| Accelerated Failure Time  | Loss 3        | ✔️   | ✔️   |
+
+
+## Experiments
+
+Breslow
