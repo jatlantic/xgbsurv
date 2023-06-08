@@ -10,7 +10,7 @@ from xgbsurv.models.eh_ah_final import ah_likelihood, ah_objective, \
  get_cumulative_hazard_function_ah
 from xgbsurv.models.eh_final import eh_likelihood, eh_objective,\
       get_cumulative_hazard_function_eh
-from xgbsurv.models.utils import transform_back 
+from xgbsurv.models.utils import transform_back, sort_X_y_pandas
 from xgbsurv.docstrings.xgbsurv_docstrings import get_xgbsurv_docstring, \
 get_xgbsurv_fit_docstring
 from xgboost import XGBRegressor
@@ -72,24 +72,26 @@ class XGBSurv(XGBRegressor):
         else:
             eval_loss = eval_metric 
 
-        super().__init__(objective=obj, eval_metric= eval_loss, disable_default_eval_metric=1,**kwargs)
+        super().__init__(objective=obj, eval_metric= eval_loss, **kwargs)
         #disable_default_eval_metric=disable,
 
     def fit(self, X, y, *, eval_test_size=None, **kwargs):
         __doc__ = get_xgbsurv_fit_docstring()
 
-        #if not isinstance(X, np.ndarray):
-        #    raise TypeError('X must be a numpy array')
+        #print('types',type(X),type(y))
+        #Ct transforms to numpy array to mixtures are expected
+        if isinstance(X, np.ndarray) and isinstance(y, pd.Series):
+            y = y.values
         
-        # TODO: remove for efficiency
-        #self.y = y
-        #self.X = X
-        # deephit multioutput
-        # so far this creates errors
-        # if self.model_type=='deephit_objective':
-        #     print('running deephit')
-        #     n = len(np.unique(np.abs(y)))
-        #     y = np.tile(y, (n,1)).T
+        if isinstance(X, np.ndarray) and isinstance(y, pd.DataFrame):
+            y = y.values
+
+        if isinstance(X, pd.DataFrame) and isinstance(y, pd.Series):
+            X, y = sort_X_y_pandas(X, y)
+        elif isinstance(X, np.ndarray) and isinstance(y, np.ndarray):
+            X, y = self._sort_X_y(X, y)
+        else:
+            print("Data type is not correct - use either pandas DataFrame/Series or numpy ndarray. ")
 
         if eval_test_size is not None:
         
@@ -103,14 +105,36 @@ class XGBSurv(XGBRegressor):
                                                 test_size=eval_test_size,
                                                 random_state=params['random_state'],
                                                 stratify=np.sign(y)) 
+            #print('types2',type(X_train),type(y_train))
+            #print('types3',type(X_test),type(y_test))
+            #print('shapes', X_train.shape,y_train.shape)
+            #print('shapes 2', X_test.shape,y_test.shape)
+            if isinstance(X_train, pd.DataFrame) and isinstance(y_train, pd.Series):
+                X_train, y_train = sort_X_y_pandas(X_train, y_train)
+
+            elif isinstance(X_train, np.ndarray) and isinstance(y_train, np.ndarray):
+                X_train, y_train = self._sort_X_y(X_train, y_train)
+
+            elif isinstance(X_test, pd.DataFrame) and isinstance(y_test, pd.Series):
+                X_test, y_test = sort_X_y_pandas(X_test, y_test)
+
+            elif isinstance(X_test, np.ndarray) and isinstance(y_test, np.ndarray):
+                X_test, y_test = self._sort_X_y(X_test, y_test)
+            # eh case
+            elif isinstance(X_train, pd.DataFrame) and isinstance(y_train, pd.DataFrame):
+                X_train, y_train = sort_X_y_pandas(X_train, y_train)
             
+            elif isinstance(X_test, pd.DataFrame) and isinstance(y_test, pd.DataFrame):
+                X_test, y_test = sort_X_y_pandas(X_test, y_test)
+
+            else:
+                print("Data type is not correct - use either pandas DataFrame/Series or numpy ndarray. ")
             
-            X_train, y_train = self._sort_X_y(X_train, y_train)
-            X_test, y_test = self._sort_X_y(X_test, y_test)
-            
+
             # 1. column training loss
             # 2. column separat validation set loss
             eval_set = [(X_train, y_train),(X_test, y_test)]
+            #print('eval_set',eval_set)
             kwargs['eval_set'] = eval_set
             
             return super(XGBSurv, self).fit(X_train, y_train, **kwargs)
@@ -185,7 +209,7 @@ class XGBSurv(XGBRegressor):
         #condition end
         #y_abs = np.absolute(y)
         if not np.all(np.diff(y_abs) >= 0):
-            print('Values are being sorted!')
+            #print('Values are being sorted!')
             order = np.argsort(y_abs, kind="mergesort")
             y = y[order]
             X = X[order]

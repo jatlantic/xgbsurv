@@ -486,7 +486,7 @@ def get_cumulative_hazard_function_eh(
         time_train, event_train = transform_back(y_train[:,0])
     else:
         time_train, event_train = transform_back(y_train)
-
+    
     test_ix = np.argsort(time_test)
     time_test = time_test[test_ix]
     event_test = event_test[test_ix]
