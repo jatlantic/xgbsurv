@@ -33,7 +33,7 @@ pip install --user -e .
 
 | Model                     | Loss Function | GBDT | DL   |
 |---------------------------|---------------|------|------|
-| Breslow                   | Loss 1        | ✔️   | ✔️   |
+| Breslow                   | $L_{\mathrm{breslow}}=\prod_i\left(\frac{\exp \left[g\left(\mathbf{x}_i\right)\right]}{\sum_{j \in \mathcal{R}_i} \exp \left[g\left(\mathbf{x}_j\right)\right]}\right)^{D_i}$        | ✔️   | ✔️   |
 | Efron                     | Loss 2        | ✔️   | ✔️   |
 | Cboost                    | Loss 3        | ✔️   | ✔️   |
 | Extended Hazards          | Loss 3        | ✔️   | ✔️   |
