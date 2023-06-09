@@ -137,3 +137,7 @@ dmypy.json
 # zip files
 *.zip
 
+# old files
+/archive
+/examples/archive
+

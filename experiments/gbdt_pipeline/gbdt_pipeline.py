@@ -193,10 +193,10 @@ def train_gbdt_complete(
     params_df.to_csv(current_path+'/params/'+model+method+'_best_params_'+str(i)+'_'+dataset_name+'.csv', index=False)
 
     if model in ['cind']:
-            cindex_score_train = cindex_censored(y_train, -best_preds_train)
+            cindex_score_train = cindex_censored(y_train, best_preds_train)
             print('Concordance Index',cindex_score_train)
             ibs_score_train = np.nan
-            cindex_score_test = cindex_censored(y_test,-best_preds_test)
+            cindex_score_test = cindex_censored(y_test,best_preds_test)
             print('Concordance Index Test',cindex_score_test)
             ibs_score_test = np.nan
     else:

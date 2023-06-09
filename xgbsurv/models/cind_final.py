@@ -102,7 +102,7 @@ def cind_gradient(y, predictor, weights, sigma=0.1):
     weights_out = weights #compute_weights(time, event)
     M1 = np.exp(x/sigma)/(sigma *np.square((1+np.exp(x/sigma))))*weights_out #verify squared, reckon elementwise
     cind_grad = np.sum(M1,axis=0) - np.sum(M1, axis=1)
-    return -cind_grad*n_events # beware of negative sign
+    return cind_grad*n_events # beware of negative sign
 
 def cind_hessian(y, predictor, weights, sigma=0.1):
     time, event = transform_back(y)

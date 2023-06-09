@@ -75,8 +75,8 @@ scenarios = {
     'aft_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
     'eh_dl_not_tcga': {'learning_rate': 0.0001, 'max_epochs': (10, 20)},
     'eh_dl_tcga': {'learning_rate': 0.0001, 'max_epochs': (150, 250)},
-    'ah_dl_not_tcga': {'learning_rate': 0.001, 'max_epochs': (10, 20)},
-    'ah_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
+    'ah_dl_not_tcga': {'learning_rate': 0.0001, 'max_epochs': (10, 20)},
+    'ah_dl_tcga': {'learning_rate': 0.001, 'max_epochs': (10, 20)},
     'cind_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
     'cind_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)}
 }
