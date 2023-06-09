@@ -140,4 +140,5 @@ dmypy.json
 # old files
 /archive
 /examples/archive
+/experiments/archive
 

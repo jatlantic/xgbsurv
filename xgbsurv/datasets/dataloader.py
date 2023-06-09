@@ -6,7 +6,7 @@ from sklearn.utils import Bunch
 from xgbsurv.datasets.utils import transform
 import warnings
 warnings.filterwarnings("ignore")
-#/Users/JUSC/Documents/xgbsurv/xgbsurv/datasets/data/METABRIC_adapted.csv
+
 
 def check_if_time_sorted(dataframe):
     check_sorted = dataframe["time"].is_monotonic_increasing
