@@ -139,6 +139,8 @@ dmypy.json
 
 # old files
 /archive
-/examples/archive
+/examples/archive/
+/experiments/archive/
+/xgbsurv/experiments/archive
 /experiments/archive
 
