@@ -6,7 +6,7 @@ Sklearn survival analysis with gradient boosted decision trees (GBDTs).
 
 | Models                    | GBDT | DL   | Example Notebook   |
 |---------------------------|------|------|--------------------|
-| Breslow                   | ✔️    | ✔️    |[Breslow](../examples/xgbsurv_breslow.ipynb)|
+| Breslow                   | ✔️    | ✔️    |[Breslow]([../examples/xgbsurv_breslow.ipynb](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_breslow.ipynb))|
 | Efron                     | ✔️    | ✔️    |[Efron](../xgbsurv/examples/xgbsurv_efron.ipynb)|
 | Cboost                    | ✔️    | ✔️    |[Cboost](../xgbsurv/examples/xgbsurv_cboost.ipynb)|
 | Extended Hazards          | ✔️    | ✔️    |[EH](../xgbsurv/examples/xgbsurv_eh.ipynb)|
