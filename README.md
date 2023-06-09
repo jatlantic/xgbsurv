@@ -7,12 +7,11 @@ Sklearn survival analysis with gradient boosted decision trees (GBDTs).
 | Models                    | GBDT | DL   | Example Notebook   |
 |---------------------------|------|------|--------------------|
 | Breslow                   | ✔️    | ✔️    |[Breslow](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_breslow.ipynb)|
-| Efron                     | ✔️    | ✔️    |[Efron](../xgbsurv/examples/xgbsurv_efron.ipynb)|
-| Cboost                    | ✔️    | ✔️    |[Cboost](../xgbsurv/examples/xgbsurv_cboost.ipynb)|
-| Extended Hazards          | ✔️    | ✔️    |[EH](../xgbsurv/examples/xgbsurv_eh.ipynb)|
-| Accelerated Hazards       | ✔️    | ✔️    |[AH](../xgbsurv/examples/xgbsurv_ah.ipynb)|
-| Accelerated Failure Time  | ✔️    | ✔️    |[AFT](../xgbsurv/examples/xgbsurv_aft.ipynb)|
-
+| Efron                     | ✔️    | ✔️    |[Efron](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_efron.ipynb)|
+| Cboost                    | ✔️    | ✔️    |[Cboost](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_cboost.ipynb)|
+| Extended Hazards          | ✔️    | ✔️    |[EH](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_eh.ipynb)|
+| Accelerated Hazards       | ✔️    | ✔️    |[AH](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_ah.ipynb)|
+| Accelerated Failure Time  | ✔️    | ✔️    |[AFT](https://github.com/jatlantic/xgbsurv/blob/main/examples/xgbsurv_aft.ipynb)|
 
 
 ## Installation
