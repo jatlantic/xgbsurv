@@ -144,5 +144,6 @@ dmypy.json
 /experiments/archive/
 /experiments/archive
 /xgbsurv/experiments/archive
+/xgbsurv/archive_functions
 
 
