@@ -232,7 +232,7 @@ def train_gbdt_complete(
         ibs_score_test = ev.integrated_brier_score(time_grid_test)
         print('Concordance Index',cindex_score_test)
         print('Integrated Brier Score:',ibs_score_test)
-    metric = {'model':model, 'dataset':dataset_name, 'cindex_train':[cindex_score_train], 'cindex_test':[cindex_score_test], 'ibs_train':[ibs_score_train], 'ibs_score_test':[ibs_score_test]}
+    metric = {'model':model, 'dataset':dataset_name, 'cindex_train':[cindex_score_train], 'cindex_test':[cindex_score_test], 'ibs_train':[ibs_score_train], 'ibs_test':[ibs_score_test]}
     pd.DataFrame(metric).to_csv(current_path+'/metrics/'+model+method+'_metric_'+str(i)+'_'+dataset_name+'.csv', index=False)
     return metric
 

@@ -7,6 +7,7 @@ from xgbsurv.datasets import (load_metabric, load_flchain, load_rgbsg, load_supp
 from xgbsurv.models.utils import sort_X_y_pandas, transform_back, transform
 from xgbsurv.models.breslow_final import get_cumulative_hazard_function_breslow, breslow_estimator_loop
 import torch
+from skorch.callbacks import GradientNormClipping
 from torch import nn
 from xgbsurv.evaluation import cindex_censored
 from sklearn.metrics import make_scorer
@@ -254,6 +255,8 @@ class InputShapeSetter(skorch.callbacks.Callback):
     def on_train_begin(self, net, X, y):
         net.set_params(module__input_units=X.shape[-1])
 
+
+
 def train_dl_complete(
             dataset_name,
             X, 
@@ -388,6 +391,10 @@ def train_dl_complete(
         train_split = CustomValidSplit(0.2, stratified=True, random_state=rand_state), 
         verbose=0
     )
+    if model in ['ah']:
+        print('gradient clipping')
+        estimator.callbacks.append(("gradientclip",GradientNormClipping(gradient_clip_value=0.05,gradient_clip_norm_type=1)))
+
     #print('estimator', estimator)
     pl = Pipeline([('scaler',ct),
                     ('estimator', estimator)])
@@ -467,7 +474,7 @@ def train_dl_complete(
         ibs_score_test = ev.integrated_brier_score(time_grid_test)
         print('Concordance Index',cindex_score_test)
         print('Integrated Brier Score:',ibs_score_test)
-    metric = {'model':model, 'dataset':dataset_name, 'cindex_train':[cindex_score_train], 'cindex_test':[cindex_score_test], 'ibs_train':[ibs_score_train], 'ibs_score_test':[ibs_score_test]}
+    metric = {'model':model, 'dataset':dataset_name, 'cindex_train':[cindex_score_train], 'cindex_test':[cindex_score_test], 'ibs_train':[ibs_score_train], 'ibs_test':[ibs_score_test]}
     pd.DataFrame(metric).to_csv(current_path+'/metrics/'+model+'_metric_'+str(i)+'_'+dataset_name+'.csv', index=False)
     return metric
 

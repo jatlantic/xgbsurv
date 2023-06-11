@@ -48,6 +48,39 @@ Install in editable mode for development:
 pip install --user -e .
 ```
 
+### Code Example
+```
+import numpy as np
+from xgbsurv import XGBSurv
+from xgbsurv.datasets import load_metabric
+from xgbsurv.models.utils import sort_X_y, transform_back
+from pycox.evaluation import EvalSurv
+from sklearn.model_selection import train_test_split
+
+
+data = load_metabric(path="your_path", as_frame=False)
+# stratify by event indicated by sign
+target_sign = np.sign(data.target)
+X_train, X_test, y_train, y_test = train_test_split(data.data, data.target, stratify=target_sign)
+# sort data
+X_train, y_train = sort_X_y(X_train, y_train)
+X_test, y_test = sort_X_y(X_test, y_test)
+model = XGBSurv(n_estimators=25, objective="breslow_objective",
+                                             eval_metric="breslow_loss",
+                                             learning_rate=0.3,
+                                             random_state=7)
+
+eval_set = [(X_train, y_train)]
+model.fit(X_train, y_train, eval_set=eval_set)
+df_survival_function = model.predict_survival_function(X_train, X_test, y_train, y_test)
+
+# C-index evaluation
+durations_test, events_test = transform_back(y_test)
+time_grid = np.linspace(durations_test.min(), durations_test.max(), 100)
+ev = EvalSurv(df_survival_function, durations_test, events_test, censor_surv='km')
+print('Concordance Index',ev.concordance_td('antolini'))
+```
+
 ## Data
 
 | Dataset Name | Download URL | Load Command | Source |
@@ -78,9 +111,9 @@ Zhong, Qixian, Jonas W Mueller, and Jane-Ling Wang. 2021. “Deep Extended Hazar
 
 ## Citation
 
-If you would like to cite this work:
+To cite this work please use:
 
-jatlantic. 2023. "XGBSurv: Gradient Boosted Decision Trees for Survival Analysis."
+Julius Schulte. 2023. "XGBSurv: Gradient Boosted Decision Trees for Survival Analysis."
 
 
 
