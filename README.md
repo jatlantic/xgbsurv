@@ -113,7 +113,7 @@ Zhong, Qixian, Jonas W Mueller, and Jane-Ling Wang. 2021. “Deep Extended Hazar
 
 To cite this work please use:
 
-Julius Schulte. 2023. "XGBSurv: Gradient Boosted Decision Trees for Survival Analysis."
+J. Schulte. 2023. "XGBSurv: Gradient Boosted Decision Trees for Survival Analysis."
 
 
 
