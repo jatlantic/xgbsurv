@@ -146,4 +146,7 @@ dmypy.json
 /xgbsurv/experiments/archive
 /xgbsurv/archive_functions
 
+# .png
+*.png
+
 

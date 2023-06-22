@@ -391,9 +391,9 @@ def train_dl_complete(
         train_split = CustomValidSplit(0.2, stratified=True, random_state=rand_state), 
         verbose=0
     )
-    if model in ['ah']:
+    if model in ['ah','eh']:
         print('gradient clipping')
-        estimator.callbacks.append(("gradientclip",GradientNormClipping(gradient_clip_value=0.05,gradient_clip_norm_type=1)))
+        estimator.callbacks.append(("gradientclip",GradientNormClipping(gradient_clip_value=0.5,gradient_clip_norm_type=2)))
 
     #print('estimator', estimator)
     pl = Pipeline([('scaler',ct),
@@ -432,10 +432,10 @@ def train_dl_complete(
     params_df.to_csv(current_path+'/params/'+model+method+'best_params_'+str(i)+'_'+dataset_name+'.csv', index=False)
 
     if model in ['cind']:
-            cindex_score_train = cindex_censored(y_train, -best_preds_train.reshape(-1))
+            cindex_score_train = cindex_censored(y_train, best_preds_train.reshape(-1))
             print('Concordance Index',cindex_score_train)
             ibs_score_train = np.nan
-            cindex_score_test = cindex_censored(y_test,-best_preds_test.reshape(-1))
+            cindex_score_test = cindex_censored(y_test,best_preds_test.reshape(-1))
             print('Concordance Index Test',cindex_score_test)
             ibs_score_test = np.nan
     else:
@@ -475,6 +475,6 @@ def train_dl_complete(
         print('Concordance Index',cindex_score_test)
         print('Integrated Brier Score:',ibs_score_test)
     metric = {'model':model, 'dataset':dataset_name, 'cindex_train':[cindex_score_train], 'cindex_test':[cindex_score_test], 'ibs_train':[ibs_score_train], 'ibs_test':[ibs_score_test]}
-    pd.DataFrame(metric).to_csv(current_path+'/metrics/'+model+'_metric_'+str(i)+'_'+dataset_name+'.csv', index=False)
+    pd.DataFrame(metric).to_csv(current_path+'/metrics/'+model+method+'metric_'+str(i)+'_'+dataset_name+'.csv', index=False)
     return metric
 

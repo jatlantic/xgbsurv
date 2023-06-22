@@ -67,18 +67,18 @@ def make_param_grid_dl(learning_rate, max_epochs):
 
 
 scenarios = {
-    'breslow_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'breslow_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'efron_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'efron_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'aft_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'aft_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'eh_dl_not_tcga': {'learning_rate': 0.0001, 'max_epochs': (10, 20)},
-    'eh_dl_tcga': {'learning_rate': 0.0001, 'max_epochs': (150, 250)},
-    'ah_dl_not_tcga': {'learning_rate': 0.00001, 'max_epochs': (10, 15)},
-    'ah_dl_tcga': {'learning_rate': 0.001, 'max_epochs': (10, 20)},
-    'cind_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)},
-    'cind_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (150, 250)}
+    'breslow_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)},
+    'breslow_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)},
+    'efron_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)},
+    'efron_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)},
+    'aft_dl_not_tcga': {'learning_rate': 0.00001, 'max_epochs': (50, 60)},
+    'aft_dl_tcga': {'learning_rate': 0.0001, 'max_epochs': (50, 60)},
+    'eh_dl_not_tcga': {'learning_rate': 0.00001, 'max_epochs': (50, 60)},
+    'eh_dl_tcga': {'learning_rate': 0.0001, 'max_epochs': (50, 60)},
+    'ah_dl_not_tcga': {'learning_rate': 0.00001, 'max_epochs': (50, 60)},
+    'ah_dl_tcga': {'learning_rate': 0.0001, 'max_epochs': (50, 60)},
+    'cind_dl_not_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)},
+    'cind_dl_tcga': {'learning_rate': 0.01, 'max_epochs': (50, 60)}
 }
 
 # Save each param_grid with its respective name
