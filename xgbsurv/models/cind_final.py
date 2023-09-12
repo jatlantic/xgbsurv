@@ -82,6 +82,8 @@ def cind_loss(y: npt.NDArray[float], predictor: npt.NDArray[float], sigma: npt.N
     """
     # f corresponds to predictor in paper
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     n = time.shape[0]
     n_events = np.sum(event)
     etaj = np.full((n,n), predictor)

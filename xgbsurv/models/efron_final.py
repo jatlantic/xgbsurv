@@ -25,6 +25,8 @@ def efron_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[floa
     """
     # Assumes times have been sorted beforehand.
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     n_events = np.sum(event)
     partial_hazard = np.exp(log_partial_hazard)
     samples = time.shape[0]

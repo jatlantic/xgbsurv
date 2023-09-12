@@ -143,6 +143,7 @@ dmypy.json
 /examples/archive/
 /experiments/archive/
 /experiments/archive
+/xgbsurv/tests/archive/
 /xgbsurv/experiments/archive
 /xgbsurv/archive_functions
 

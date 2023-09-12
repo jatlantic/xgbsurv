@@ -91,6 +91,10 @@ print('Concordance Index',ev.concordance_td('antolini'))
 | SUPPORT      | [Github](https://github.com/jaredleekatzman/DeepSurv/tree/master/experiments/data/support) | `load_support()` | [DeepSurv](https://github.com/jaredleekatzman/DeepSurv) |
 | TCGA         | [National Cancer Institute](https://portal.gdc.cancer.gov/) | `load_tcga(cancer_type='BLCA')` | [TCGA Research Network](https://portal.gdc.cancer.gov/)  |
 
+## To-DO
+
+[ ] Pytest for C-index model
+
 ## Sources & Further Reading
 
 Chen, Tianqi, and Carlos Guestrin. 2016. “XGBoost: A Scalable Tree Boosting System.” In Proceedings of the 22nd ACM SIGKDD International Conference on Knowledge Discovery and Data Mining, 785–94. https://doi.org/10.1145/2939672.2939785.

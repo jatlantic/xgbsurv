@@ -59,6 +59,8 @@ def aft_likelihood(
     """
 
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     n_events = np.sum(event)
     n_samples: int = time.shape[0]
     if bandwidth==None:

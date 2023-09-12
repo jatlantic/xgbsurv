@@ -479,9 +479,10 @@ def eh_likelihood_torch_2(
     #print('linear_predictor shape',linear_predictor.shape)
     #print('linear_predictor type',type(linear_predictor))
     #y1 = y[:,0]
+    print('teeeest')
     time, event = transform_back_torch(y)
-    #print('time.shape',time.shape)
-    #print('event.shape',event.shape)
+    print('time.shape',time.shape)
+    print('event.shape',event.shape)
     #print('linear_predictor.shape', linear_predictor.shape)
     #time, event = transform_back_torch(y)
     #print('linear_predictor',linear_predictor)
@@ -517,6 +518,7 @@ def eh_likelihood_torch_2(
     kernel_matrix = torch.exp(
         -1 / 2 * torch.square(diff[event_mask, :])
     ) / torch.sqrt(torch.tensor(2) * torch.pi)
+    print('kernel matrix', kernel_matrix)
     integrated_kernel_matrix = rv.cdf(diff)
     
     inverse_sample_size: float = 1 / n_samples

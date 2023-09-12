@@ -41,6 +41,8 @@ def deephit_loss1_pycox(y, phi)->float:
     #print('loss y shape', y.shape)
     y = y[:,0]
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     epsilon = 1e-7
     bins = np.unique(time)
     # let's assume idx_durations maps each time to the position in the unique time vector

@@ -94,12 +94,15 @@ def eh_likelihood(
     # XGBoost limitation, y and linear predictor contain two cols
     y = y.reshape(linear_predictor.shape)
     y1 = y[:, 0]
+    time, event = transform_back(y1)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     # need two predictors here
     linear_predictor_1: np.array = linear_predictor[:, 0] * sample_weight
     linear_predictor_2: np.array = linear_predictor[:, 1] * sample_weight
     exp_linear_predictor_1 = np.exp(linear_predictor_1)
     exp_linear_predictor_2 = np.exp(linear_predictor_2)
-    time, event = transform_back(y1)
+
     n_samples: int = time.shape[0]
     n_events: int = np.sum(event)
     if bandwidth==None:
@@ -221,6 +224,8 @@ def eh_gradient(
     # XGBoost limitation
     y1 = y[:, 0]
     time, event = transform_back(y1)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     n_samples: int = time.shape[0]
     n_events: int = np.sum(event)
     bandwidth = 1.30 * math.pow(n_samples, -0.2)

@@ -108,6 +108,8 @@ def ah_likelihood(
     """
 
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     n_samples: int = time.shape[0]
     n_events = np.sum(event)
     bandwidth = 1.30 * math.pow(n_samples, -0.2)

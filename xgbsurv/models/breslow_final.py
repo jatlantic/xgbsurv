@@ -1,6 +1,7 @@
 # Breslow final
 from math import log
 import numpy as np
+import numpy.typing as npt
 from numba import jit
 #from scipy.special import logsumexp
 import numpy.typing as npt
@@ -28,6 +29,8 @@ def breslow_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[fl
     """
     # Assumes times have been sorted beforehand.
     time, event = transform_back(y)
+    if np.sum(event) == 0:
+        raise RuntimeError("No events detected!")
     partial_hazard = np.exp(log_partial_hazard)
     n_events = np.sum(event)
     n_samples = time.shape[0]
@@ -55,6 +58,10 @@ def breslow_likelihood(y: npt.NDArray[float], log_partial_hazard: npt.NDArray[fl
 
         previous_time = current_time
         accumulated_sum += partial_hazard[k]
+    
+    if set_count:
+        likelihood -= set_count * log(risk_set_sum)
+    
     final_likelihood = -likelihood / n_events #n_samples
     return final_likelihood
 
