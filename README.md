@@ -1,9 +1,9 @@
 
-**Important Notice: This project has been published and moved to https://github.com/BoevaLab/sparsesurv.
+**Important Notice: This project has been published and moved to https://github.com/BoevaLab/sparsesurv.**
 
-For further information see:
+**For further information see:**
 
-David Wissel, Nikita Janakarajan, Julius Schulte, Daniel Rowson, Xintian Yuan, Valentina Boeva, sparsesurv: a Python package for fitting sparse survival models via knowledge distillation, Bioinformatics, Volume 40, Issue 9, September 2024, btae521, https://doi.org/10.1093/bioinformatics/btae521**
+**David Wissel, Nikita Janakarajan, Julius Schulte, Daniel Rowson, Xintian Yuan, Valentina Boeva, sparsesurv: a Python package for fitting sparse survival models via knowledge** **distillation, Bioinformatics, Volume 40, Issue 9, September 2024, btae521, https://doi.org/10.1093/bioinformatics/btae521**
 
 ---------
 
